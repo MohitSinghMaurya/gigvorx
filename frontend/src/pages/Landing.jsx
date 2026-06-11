@@ -44,7 +44,7 @@ export default function Landing() {
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3">
               <Link to="/signup">
-                <Button size="lg" data-testid="hero-cta-signup" className="bg-foreground text-background hover:bg-foreground/90 h-12 px-7 text-base font-semibold">
+                <Button size="lg" data-testid="hero-cta-signup" className="bg-brand-gradient text-white hover:opacity-90 h-12 px-7 text-base font-semibold shadow-lg shadow-blue-500/25">
                   Start 7-day free trial <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>

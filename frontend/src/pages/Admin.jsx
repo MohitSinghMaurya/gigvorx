@@ -48,22 +48,34 @@ export default function Admin() {
     const monthMax = Math.max(1, ...months.map(m => m.count));
 
     // Aggregate feature usage from all users' localStorage
+    // Iterate localStorage keys directly so we pick up any user data, not only seeded users.
     let totalBriefs = 0, totalInvoices = 0, totalClients = 0, totalLeads = 0;
     let usersWithLeads = 0;
     const sourceCounts = {};
-    users.forEach(u => {
-      try {
-        totalBriefs += JSON.parse(localStorage.getItem(`gv_v1:${u.id}:briefs`) || "[]").length;
-        totalInvoices += JSON.parse(localStorage.getItem(`gv_v1:${u.id}:invoices`) || "[]").length;
-        const clients = JSON.parse(localStorage.getItem(`gv_v1:${u.id}:clients`) || "[]");
-        totalClients += clients.length;
-        const leads = clients.filter(c => c.status); // any contact with a status is a pipeline lead
-        totalLeads += leads.length;
-        if (leads.length > 0) usersWithLeads += 1;
-        leads.forEach(l => { if (l.leadSource) sourceCounts[l.leadSource] = (sourceCounts[l.leadSource] || 0) + 1; });
-      } catch {}
-    });
-    const avgLeadsPerUser = users.length ? Math.round(totalLeads / users.length * 10) / 10 : 0;
+    const seen = new Set();
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith("gv_v1:") || key.startsWith("gv_v1:global:")) continue;
+        const m = key.match(/^gv_v1:([^:]+):(.+)$/);
+        if (!m) continue;
+        const [, userId, resource] = m;
+        seen.add(userId);
+        const list = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(list)) continue;
+        if (resource === "briefs") totalBriefs += list.length;
+        else if (resource === "invoices") totalInvoices += list.length;
+        else if (resource === "clients") {
+          totalClients += list.length;
+          const leads = list.filter(c => c && c.status); // any contact with a pipeline status counts
+          totalLeads += leads.length;
+          if (leads.length > 0) usersWithLeads += 1;
+          leads.forEach(l => { if (l.leadSource) sourceCounts[l.leadSource] = (sourceCounts[l.leadSource] || 0) + 1; });
+        }
+      }
+    } catch {}
+    const userCountForAvg = Math.max(users.length, seen.size, 1);
+    const avgLeadsPerUser = Math.round((totalLeads / userCountForAvg) * 10) / 10;
     const topSources = Object.entries(sourceCounts).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count).slice(0, 5);
 
     return { trials, paid, expired, planCounts, revenue, months, monthMax, totalBriefs, totalInvoices, totalClients, totalLeads, usersWithLeads, avgLeadsPerUser, topSources };
