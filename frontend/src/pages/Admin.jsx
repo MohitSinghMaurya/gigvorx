@@ -48,16 +48,25 @@ export default function Admin() {
     const monthMax = Math.max(1, ...months.map(m => m.count));
 
     // Aggregate feature usage from all users' localStorage
-    let totalBriefs = 0, totalInvoices = 0, totalClients = 0;
+    let totalBriefs = 0, totalInvoices = 0, totalClients = 0, totalLeads = 0;
+    let usersWithLeads = 0;
+    const sourceCounts = {};
     users.forEach(u => {
       try {
         totalBriefs += JSON.parse(localStorage.getItem(`gv_v1:${u.id}:briefs`) || "[]").length;
         totalInvoices += JSON.parse(localStorage.getItem(`gv_v1:${u.id}:invoices`) || "[]").length;
-        totalClients += JSON.parse(localStorage.getItem(`gv_v1:${u.id}:clients`) || "[]").length;
+        const clients = JSON.parse(localStorage.getItem(`gv_v1:${u.id}:clients`) || "[]");
+        totalClients += clients.length;
+        const leads = clients.filter(c => c.status); // any contact with a status is a pipeline lead
+        totalLeads += leads.length;
+        if (leads.length > 0) usersWithLeads += 1;
+        leads.forEach(l => { if (l.leadSource) sourceCounts[l.leadSource] = (sourceCounts[l.leadSource] || 0) + 1; });
       } catch {}
     });
+    const avgLeadsPerUser = users.length ? Math.round(totalLeads / users.length * 10) / 10 : 0;
+    const topSources = Object.entries(sourceCounts).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count).slice(0, 5);
 
-    return { trials, paid, expired, planCounts, revenue, months, monthMax, totalBriefs, totalInvoices, totalClients };
+    return { trials, paid, expired, planCounts, revenue, months, monthMax, totalBriefs, totalInvoices, totalClients, totalLeads, usersWithLeads, avgLeadsPerUser, topSources };
   }, [users]);
 
   if (user?.role !== "admin") return <Navigate to="/dashboard" replace />;
@@ -76,13 +85,41 @@ export default function Admin() {
         <Stat testid="admin-total-users" label="Total users" value={users.length} sub="All accounts" icon={Users} accent="bg-foreground" />
         <Stat testid="admin-trials" label="Active trials" value={stats.trials.length - stats.expired.length} sub={`${stats.expired.length} expired`} icon={UserCheck} accent="bg-amber-500" />
         <Stat testid="admin-paid" label="Paid users" value={stats.paid.length} sub={`${PLANS.length} plans`} icon={CreditCard} accent="bg-emerald-600" />
-        <Stat testid="admin-revenue" label="Revenue (MRR)" value={formatCurrency(stats.revenue)} sub="Placeholder · Razorpay coming soon" icon={BarChart3} accent="bg-violet-600" />
+        <Stat testid="admin-revenue" label="Revenue (MRR)" value={formatCurrency(stats.revenue)} sub="Placeholder · Razorpay coming soon" icon={BarChart3} accent="bg-brand-gradient" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Stat label="Briefs created" value={stats.totalBriefs} sub="Across all users" icon={FileText} accent="bg-fuchsia-600" />
         <Stat label="Invoices created" value={stats.totalInvoices} sub="Across all users" icon={Receipt} accent="bg-indigo-600" />
         <Stat label="Clients tracked" value={stats.totalClients} sub="Across all users" icon={Users} accent="bg-sky-600" />
+      </div>
+
+      {/* Lead pipeline platform metrics */}
+      <div>
+        <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-3">Lead pipeline (platform-wide)</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <Stat testid="admin-leads-users" label="Users using pipeline" value={stats.usersWithLeads} sub={`${users.length ? Math.round(stats.usersWithLeads/users.length*100) : 0}% of all users`} icon={Users} accent="bg-blue-600" />
+          <Stat testid="admin-total-leads" label="Total leads tracked" value={stats.totalLeads} sub="Across all users" icon={Users} accent="bg-sky-600" />
+          <Stat testid="admin-avg-leads" label="Avg leads per user" value={stats.avgLeadsPerUser} sub="Placeholder · all-time avg" icon={BarChart3} accent="bg-cyan-600" />
+        </div>
+        {stats.topSources.length > 0 && (
+          <Card className="p-6 mt-4">
+            <h3 className="font-bold text-lg mb-1">Most used lead sources</h3>
+            <p className="text-xs text-muted-foreground mb-4">Top 5 channels driving leads across the platform.</p>
+            <div className="space-y-3">
+              {stats.topSources.map(s => {
+                return (
+                  <div key={s.id}>
+                    <div className="flex justify-between text-xs font-medium mb-1.5"><span className="capitalize">{s.id.replace(/_/g, " ")}</span><span className="text-muted-foreground">{s.count} leads</span></div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-blue-500 to-sky-500" style={{ width: Math.max(2, (s.count / stats.topSources[0].count) * 100) + "%" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

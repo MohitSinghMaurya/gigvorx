@@ -18,91 +18,96 @@ code, .font-mono {
 
 @layer base {
     :root {
-        --background: 0 0% 100%;
-        --foreground: 240 10% 8%;
+        /* light theme · sky blue + electric blue + ink */
+        --background: 210 40% 99%;
+        --foreground: 222 47% 11%;
         --card: 0 0% 100%;
-        --card-foreground: 240 10% 8%;
+        --card-foreground: 222 47% 11%;
         --popover: 0 0% 100%;
-        --popover-foreground: 240 10% 8%;
-        --primary: 240 6% 10%;
+        --popover-foreground: 222 47% 11%;
+        --primary: 217 91% 55%;          /* electric blue */
         --primary-foreground: 0 0% 100%;
-        --secondary: 240 5% 96%;
-        --secondary-foreground: 240 6% 10%;
-        --muted: 240 5% 96%;
-        --muted-foreground: 240 4% 46%;
-        --accent: 240 5% 96%;
-        --accent-foreground: 240 6% 10%;
+        --secondary: 210 40% 96%;        /* light gray-blue */
+        --secondary-foreground: 222 47% 11%;
+        --muted: 210 40% 96%;
+        --muted-foreground: 215 16% 47%;
+        --accent: 199 89% 95%;           /* sky blue tint */
+        --accent-foreground: 217 91% 35%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 98%;
-        --border: 240 6% 90%;
-        --input: 240 6% 90%;
-        --ring: 240 6% 10%;
-        --brand: 250 80% 60%;
+        --border: 214 32% 91%;
+        --input: 214 32% 91%;
+        --ring: 217 91% 55%;
+
+        /* brand tokens */
+        --brand: 217 91% 55%;            /* primary blue */
         --brand-foreground: 0 0% 100%;
+        --brand-sky: 199 89% 60%;        /* sky blue */
+        --brand-ink: 222 47% 11%;        /* near-black navy */
+        --brand-navy: 224 71% 4%;        /* deep navy (logo bg) */
+
         --success: 158 64% 42%;
         --warning: 35 92% 52%;
         --info: 217 91% 60%;
-        --chart-1: 250 80% 60%;
-        --chart-2: 158 64% 42%;
-        --chart-3: 35 92% 52%;
-        --chart-4: 217 91% 60%;
+
+        --chart-1: 217 91% 55%;
+        --chart-2: 199 89% 55%;
+        --chart-3: 158 64% 42%;
+        --chart-4: 35 92% 52%;
         --chart-5: 339 90% 51%;
-        --radius: 0.65rem;
+
+        --radius: 0.75rem;
     }
 }
 
 @layer base {
-    * {
-        @apply border-border;
-    }
-    html, body, #root {
-        height: 100%;
-    }
+    * { @apply border-border; }
+    html, body, #root { height: 100%; }
     body {
         @apply bg-background text-foreground;
         font-feature-settings: 'rlig' 1, 'calt' 1, 'cv11' 1;
     }
-    h1, h2, h3, h4 {
-        letter-spacing: -0.02em;
-    }
+    h1, h2, h3, h4 { letter-spacing: -0.02em; }
 }
 
-/* Custom scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.3); }
+::-webkit-scrollbar-thumb { background: hsl(214 32% 85%); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(217 91% 55% / 0.4); }
 
-/* Selection */
-::selection { background: hsl(var(--brand) / 0.2); color: hsl(var(--foreground)); }
+::selection { background: hsl(var(--brand) / 0.2); color: hsl(var(--brand-ink)); }
 
-/* Subtle grid background utility */
+/* Grid / dot backgrounds */
 .bg-grid {
     background-image:
         linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
         linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
     background-size: 32px 32px;
 }
-
 .bg-dot {
     background-image: radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px);
     background-size: 20px 20px;
 }
 
-/* Brand gradient text */
+/* Brand gradient text — matches logo */
 .text-gradient {
-    background: linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(217 91% 60%) 100%);
+    background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(199 89% 60%) 50%, hsl(263 80% 65%) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
-/* Brief editor prose */
-.brief-prose h1, .brief-prose h2, .brief-prose h3 {
-    font-weight: 700;
-    margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
+.bg-brand-gradient {
+    background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(199 89% 55%) 100%);
 }
+
+.bg-logo-gradient {
+    background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(263 80% 60%) 100%);
+}
+
+/* Brief editor prose */
+.brief-prose h1, .brief-prose h2, .brief-prose h3 { font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.5rem; }
 .brief-prose h1 { font-size: 1.875rem; }
 .brief-prose h2 { font-size: 1.5rem; }
 .brief-prose h3 { font-size: 1.25rem; }
@@ -111,24 +116,12 @@ code, .font-mono {
 .brief-prose ul { list-style: disc; }
 .brief-prose ol { list-style: decimal; }
 
-/* Print styles for invoice */
-@media print {
-    .no-print { display: none !important; }
-    body { background: white; }
-}
+@media print { .no-print { display: none !important; } body { background: white; } }
 
-/* Animation */
-@keyframes fadeUp {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-up { animation: fadeUp 0.4s ease-out; }
 
-@keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-}
+[data-debug-wrapper="true"] { display: contents !important; }
 
-[data-debug-wrapper="true"] {
-    display: contents !important;
-}
+/* Pipeline column scroll */
+.pipeline-col { scrollbar-width: thin; }

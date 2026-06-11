@@ -29,7 +29,7 @@ export default function Landing() {
       {/* HERO */}
       <section className="relative overflow-hidden border-b">
         <div className="absolute inset-0 bg-grid opacity-[0.15]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-violet-200 via-transparent to-indigo-200 rounded-full blur-3xl opacity-50" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-sky-200 via-blue-100 to-blue-200 rounded-full blur-3xl opacity-60" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-24 lg:pt-28 lg:pb-32">
           <div className="max-w-3xl">
             <Badge variant="outline" className="mb-6 border-foreground/20 bg-background/80 backdrop-blur px-3 py-1.5" data-testid="hero-badge">
@@ -146,7 +146,7 @@ export default function Landing() {
           <h2 className="text-4xl lg:text-5xl font-bold tracking-tight mb-5">Stop juggling tools. Start closing clients.</h2>
           <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-9">Set up in 60 seconds. No credit card. Cancel anytime.</p>
           <Link to="/signup">
-            <Button size="lg" data-testid="footer-cta-signup" className="bg-foreground text-background hover:bg-foreground/90 h-12 px-8 text-base font-semibold">
+            <Button size="lg" data-testid="footer-cta-signup" className="bg-brand-gradient hover:opacity-90 text-white h-12 px-8 text-base font-semibold shadow-lg shadow-blue-500/25">
               Get started free <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </Link>

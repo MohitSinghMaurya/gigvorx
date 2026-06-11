@@ -39,7 +39,7 @@ export default function Invoices() {
           <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
           <p className="text-muted-foreground mt-1">Track every invoice from draft to paid.</p>
         </div>
-        <Button onClick={() => navigate("/invoices/new")} data-testid="new-invoice-btn" className="bg-foreground text-background hover:bg-foreground/90">
+        <Button onClick={() => navigate("/invoices/new")} data-testid="new-invoice-btn" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20">
           <Plus className="w-4 h-4 mr-1.5" />New invoice
         </Button>
       </div>
@@ -66,7 +66,7 @@ export default function Invoices() {
           <Receipt className="w-10 h-10 mx-auto text-muted-foreground/40 mb-4" />
           <p className="font-semibold mb-1">{items.length === 0 ? "No invoices yet" : "No matches"}</p>
           <p className="text-sm text-muted-foreground mb-5">{items.length === 0 ? "Send your first professional invoice in under a minute." : "Try a different filter or search."}</p>
-          {items.length === 0 && <Button onClick={() => navigate("/invoices/new")} data-testid="empty-new-invoice" className="bg-foreground text-background"><Plus className="w-4 h-4 mr-1.5" />Create invoice</Button>}
+          {items.length === 0 && <Button onClick={() => navigate("/invoices/new")} data-testid="empty-new-invoice" className="bg-brand-gradient text-white"><Plus className="w-4 h-4 mr-1.5" />Create invoice</Button>}
         </Card>
       ) : (
         <Card className="overflow-hidden">

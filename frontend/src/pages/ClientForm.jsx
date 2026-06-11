@@ -83,7 +83,7 @@ export default function ClientForm() {
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <Button type="submit" data-testid="client-save" className="bg-foreground text-background hover:bg-foreground/90"><Save className="w-4 h-4 mr-1.5" />{editing ? "Save changes" : "Add client"}</Button>
+            <Button type="submit" data-testid="client-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20"><Save className="w-4 h-4 mr-1.5" />{editing ? "Save changes" : "Add client"}</Button>
             <Button type="button" variant="outline" onClick={() => navigate("/clients")}>Cancel</Button>
           </div>
         </form>

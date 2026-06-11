@@ -4,8 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrandLockup, BrandLogoLarge } from "@/components/Brand";
 import { toast } from "sonner";
-import { Zap, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 export default function Signup() {
   const { signup } = useAuth();
@@ -30,9 +31,8 @@ export default function Signup() {
     <div className="min-h-screen flex">
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <Link to="/" className="flex items-center gap-2.5 mb-10">
-            <div className="w-8 h-8 rounded-lg bg-foreground flex items-center justify-center"><Zap className="w-4 h-4 text-background" /></div>
-            <span className="font-bold text-lg">GigVorx</span>
+          <Link to="/" className="inline-block mb-10">
+            <BrandLockup size={32} />
           </Link>
           <h1 className="text-3xl font-bold tracking-tight">Start your free trial</h1>
           <p className="text-muted-foreground mt-1.5 text-sm">7 days. No credit card. Cancel anytime.</p>
@@ -50,7 +50,7 @@ export default function Signup() {
               <Label htmlFor="password" className="text-sm">Password</Label>
               <Input id="password" data-testid="signup-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5 h-11" placeholder="At least 6 characters" />
             </div>
-            <Button type="submit" disabled={loading} data-testid="signup-submit" className="w-full h-11 bg-foreground text-background hover:bg-foreground/90 font-semibold">
+            <Button type="submit" disabled={loading} data-testid="signup-submit" className="w-full h-11 bg-brand-gradient text-white hover:opacity-90 font-semibold shadow-sm shadow-blue-500/20">
               {loading ? "Creating…" : <>Create account <ArrowRight className="w-4 h-4 ml-1" /></>}
             </Button>
           </form>
@@ -59,14 +59,16 @@ export default function Signup() {
           </p>
         </div>
       </div>
-      <div className="hidden lg:flex flex-1 bg-foreground text-background p-10 relative overflow-hidden">
+      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white p-10 relative overflow-hidden">
         <div className="absolute inset-0 bg-dot opacity-10" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
         <div className="relative max-w-md m-auto">
-          <p className="text-sm font-semibold uppercase tracking-widest text-background/60">What you get</p>
+          <BrandLogoLarge size={88} className="mb-8" />
+          <p className="text-sm font-semibold uppercase tracking-widest text-sky-300">What you get</p>
           <h3 className="mt-4 text-3xl font-bold leading-tight tracking-tight">Everything to look like a senior pro from day one.</h3>
           <ul className="mt-8 space-y-3 text-sm">
-            {["17 niche brief templates", "Modern invoices with GST & UPI", "Client CRM that actually works", "WhatsApp + PDF sharing", "Real analytics, not vanity charts"].map(i => (
-              <li key={i} className="flex items-center gap-3"><CheckCircle2 className="w-4 h-4 text-emerald-400" />{i}</li>
+            {["17 niche brief templates", "Lead pipeline with AI message templates", "Modern invoices with GST & UPI", "Client CRM that actually works", "WhatsApp + PDF sharing"].map(i => (
+              <li key={i} className="flex items-center gap-3"><CheckCircle2 className="w-4 h-4 text-sky-300" />{i}</li>
             ))}
           </ul>
         </div>

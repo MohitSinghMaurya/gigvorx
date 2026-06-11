@@ -66,7 +66,7 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate("/briefs/new")} data-testid="quick-new-brief"><FileText className="w-4 h-4 mr-1.5" />New brief</Button>
-          <Button onClick={() => navigate("/invoices/new")} data-testid="quick-new-invoice" className="bg-foreground text-background hover:bg-foreground/90"><Plus className="w-4 h-4 mr-1.5" />New invoice</Button>
+          <Button onClick={() => navigate("/invoices/new")} data-testid="quick-new-invoice" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20"><Plus className="w-4 h-4 mr-1.5" />New invoice</Button>
         </div>
       </div>
 
@@ -94,7 +94,7 @@ export default function Dashboard() {
               <p>No activity yet. Create your first brief or invoice to get started.</p>
               <div className="mt-4 flex gap-2 justify-center">
                 <Button size="sm" variant="outline" onClick={() => navigate("/clients/new")}>Add client</Button>
-                <Button size="sm" className="bg-foreground text-background" onClick={() => navigate("/briefs/new")}>New brief</Button>
+                <Button size="sm" className="bg-brand-gradient text-white" onClick={() => navigate("/briefs/new")}>New brief</Button>
               </div>
             </div>
           ) : (

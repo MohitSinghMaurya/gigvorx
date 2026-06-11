@@ -14,11 +14,15 @@ import { Plus, Search, Users, Edit2, Trash2, Mail, Phone } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Clients() {
-  const { items: clients, remove } = useCollection("clients");
+  const { items, remove } = useCollection("clients");
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
-  const filtered = clients.filter(c =>
+  // Show only "real" clients — items that have been converted from leads (isLead=false) OR have status=won.
+  // Items still in pipeline (isLead!==false and status not won) belong to /leads.
+  const clientsOnly = items.filter(c => c.isLead === false || c.status === "won");
+
+  const filtered = clientsOnly.filter(c =>
     c.name?.toLowerCase().includes(query.toLowerCase()) ||
     c.email?.toLowerCase().includes(query.toLowerCase()) ||
     c.service?.toLowerCase().includes(query.toLowerCase())
@@ -31,7 +35,7 @@ export default function Clients() {
           <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
           <p className="text-muted-foreground mt-1">All your clients in one place.</p>
         </div>
-        <Button onClick={() => navigate("/clients/new")} data-testid="add-client-btn" className="bg-foreground text-background hover:bg-foreground/90">
+        <Button onClick={() => navigate("/clients/new")} data-testid="add-client-btn" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20">
           <Plus className="w-4 h-4 mr-1.5" />Add client
         </Button>
       </div>
@@ -44,9 +48,14 @@ export default function Clients() {
       {filtered.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <Users className="w-10 h-10 mx-auto text-muted-foreground/40 mb-4" />
-          <p className="font-semibold mb-1">{clients.length === 0 ? "No clients yet" : "No matches"}</p>
-          <p className="text-sm text-muted-foreground mb-5">{clients.length === 0 ? "Start by adding your first client." : "Try a different search."}</p>
-          {clients.length === 0 && <Button onClick={() => navigate("/clients/new")} data-testid="empty-add-client" className="bg-foreground text-background"><Plus className="w-4 h-4 mr-1.5" />Add your first client</Button>}
+          <p className="font-semibold mb-1">{clientsOnly.length === 0 ? "No clients yet" : "No matches"}</p>
+          <p className="text-sm text-muted-foreground mb-5">{clientsOnly.length === 0 ? "Convert leads to clients from your pipeline, or add one directly." : "Try a different search."}</p>
+          {clientsOnly.length === 0 && (
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" onClick={() => navigate("/leads")} data-testid="empty-goto-leads">View pipeline</Button>
+              <Button onClick={() => navigate("/clients/new")} data-testid="empty-add-client" className="bg-brand-gradient text-white"><Plus className="w-4 h-4 mr-1.5" />Add client</Button>
+            </div>
+          )}
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -67,7 +76,7 @@ export default function Clients() {
                   <tr key={c.id} className="hover:bg-muted/20 transition-colors" data-testid={`client-row-${c.id}`}>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 text-white font-bold flex items-center justify-center text-xs">{(c.name || "?").slice(0, 2).toUpperCase()}</div>
+                        <div className="w-9 h-9 rounded-md bg-logo-gradient text-white font-bold flex items-center justify-center text-xs">{(c.name || "?").slice(0, 2).toUpperCase()}</div>
                         <p className="font-semibold">{c.name}</p>
                       </div>
                     </td>

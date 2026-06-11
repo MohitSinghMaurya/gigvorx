@@ -9,6 +9,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Pricing from "@/pages/Pricing";
 import Dashboard from "@/pages/Dashboard";
+import Leads from "@/pages/Leads";
 import Clients from "@/pages/Clients";
 import ClientForm from "@/pages/ClientForm";
 import Briefs from "@/pages/Briefs";
@@ -50,6 +51,7 @@ function AppRoutes() {
       <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/clients/new" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
       <Route path="/clients/:id/edit" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />

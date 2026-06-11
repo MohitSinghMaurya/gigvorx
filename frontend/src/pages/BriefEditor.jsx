@@ -122,7 +122,7 @@ export default function BriefEditor() {
           <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)} data-testid="brief-preview"><Eye className="w-4 h-4 mr-1.5" />Preview</Button>
           <Button variant="outline" size="sm" onClick={downloadPDF} data-testid="brief-pdf"><Download className="w-4 h-4 mr-1.5" />Download PDF</Button>
           <Button variant="outline" size="sm" onClick={shareWhatsApp} data-testid="brief-whatsapp"><MessageCircle className="w-4 h-4 mr-1.5" />Share on WhatsApp</Button>
-          <Button size="sm" onClick={save} data-testid="brief-save" className="bg-foreground text-background hover:bg-foreground/90"><Save className="w-4 h-4 mr-1.5" />Save</Button>
+          <Button size="sm" onClick={save} data-testid="brief-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20"><Save className="w-4 h-4 mr-1.5" />Save</Button>
         </div>
       </div>
 

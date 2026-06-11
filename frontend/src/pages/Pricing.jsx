@@ -44,7 +44,7 @@ export default function Pricing({ inApp = false }) {
                 {plan.badge && (
                   <Badge
                     data-testid={`plan-badge-${plan.id}`}
-                    className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 ${popular ? "bg-foreground text-background" : "bg-violet-600 text-white"}`}
+                    className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 ${popular ? "bg-brand-gradient text-white" : "bg-violet-600 text-white"}`}
                   >
                     {plan.badge}
                   </Badge>
@@ -59,7 +59,7 @@ export default function Pricing({ inApp = false }) {
                   data-testid={`plan-cta-${plan.id}`}
                   disabled={isCurrent}
                   onClick={() => handleSelect(plan.id)}
-                  className={`mt-5 w-full ${popular ? "bg-foreground text-background hover:bg-foreground/90" : ""}`}
+                  className={`mt-5 w-full ${popular ? "bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20" : ""}`}
                   variant={popular ? "default" : "outline"}
                 >
                   {isCurrent ? "Current plan" : (user ? "Upgrade" : "Start trial")}

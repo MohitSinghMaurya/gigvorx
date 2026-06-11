@@ -39,7 +39,7 @@ export default function Briefs() {
         </div>
         <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="new-brief-btn" className="bg-foreground text-background hover:bg-foreground/90"><Plus className="w-4 h-4 mr-1.5" />New brief</Button>
+            <Button data-testid="new-brief-btn" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20"><Plus className="w-4 h-4 mr-1.5" />New brief</Button>
           </DialogTrigger>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
@@ -81,7 +81,7 @@ export default function Briefs() {
           <FileText className="w-10 h-10 mx-auto text-muted-foreground/40 mb-4" />
           <p className="font-semibold mb-1">{items.length === 0 ? "No briefs yet" : "No matches"}</p>
           <p className="text-sm text-muted-foreground mb-5">Pick a niche template and you're ready in seconds.</p>
-          {items.length === 0 && <Button onClick={() => setPickerOpen(true)} data-testid="empty-new-brief" className="bg-foreground text-background"><Plus className="w-4 h-4 mr-1.5" />Create your first brief</Button>}
+          {items.length === 0 && <Button onClick={() => setPickerOpen(true)} data-testid="empty-new-brief" className="bg-brand-gradient text-white"><Plus className="w-4 h-4 mr-1.5" />Create your first brief</Button>}
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

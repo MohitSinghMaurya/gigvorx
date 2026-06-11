@@ -137,7 +137,7 @@ export default function InvoiceEditor() {
           {form.status !== "paid" && (
             <Button variant="outline" size="sm" onClick={markPaid} data-testid="inv-mark-paid" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"><CheckCircle2 className="w-4 h-4 mr-1.5" />Mark as paid</Button>
           )}
-          <Button size="sm" onClick={save} data-testid="inv-save" className="bg-foreground text-background hover:bg-foreground/90"><Save className="w-4 h-4 mr-1.5" />Save</Button>
+          <Button size="sm" onClick={save} data-testid="inv-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20"><Save className="w-4 h-4 mr-1.5" />Save</Button>
         </div>
       </div>
 
@@ -298,7 +298,7 @@ export default function InvoiceEditor() {
             <p className="text-muted-foreground mt-2">Thank you for marking <b>{form.invoiceNumber}</b> as paid. We'll send a confirmation to your client.</p>
             <div className="mt-6 flex gap-2 justify-center">
               <Button variant="outline" onClick={() => setPaidDialog(false)}>Close</Button>
-              <Button onClick={() => { setPaidDialog(false); shareWA(); }} className="bg-foreground text-background">Send thank you on WhatsApp</Button>
+              <Button onClick={() => { setPaidDialog(false); shareWA(); }} className="bg-brand-gradient text-white">Send thank you on WhatsApp</Button>
             </div>
           </div>
         </DialogContent>

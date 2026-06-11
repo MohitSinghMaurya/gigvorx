@@ -3,9 +3,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { daysFromNow } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Brand } from "@/components/Brand";
 import {
   LayoutDashboard, Users, FileText, Receipt, BarChart3, Settings,
-  Sparkles, LogOut, Menu, X, Shield, ChevronDown, Zap, Crown, User, ChevronRight,
+  Sparkles, LogOut, Menu, X, Shield, ChevronDown, Zap, Crown, User, ChevronRight, Target,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -16,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
+  { to: "/leads", label: "Leads", icon: Target, testid: "nav-leads" },
   { to: "/clients", label: "Clients", icon: Users, testid: "nav-clients" },
   { to: "/briefs", label: "Briefs", icon: FileText, testid: "nav-briefs" },
   { to: "/invoices", label: "Invoices", icon: Receipt, testid: "nav-invoices" },
@@ -51,7 +53,7 @@ function Breadcrumbs() {
   const { pathname } = useLocation();
   const parts = pathname.split("/").filter(Boolean);
   if (parts.length === 0) return null;
-  const labels = { dashboard: "Dashboard", clients: "Clients", briefs: "Briefs", invoices: "Invoices", analytics: "Analytics", settings: "Settings", admin: "Admin", new: "New", edit: "Edit", "pricing-app": "Pricing" };
+  const labels = { dashboard: "Dashboard", leads: "Leads", clients: "Clients", briefs: "Briefs", invoices: "Invoices", analytics: "Analytics", settings: "Settings", admin: "Admin", new: "New", edit: "Edit", "pricing-app": "Pricing" };
   return (
     <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
       <Link to="/dashboard" className="hover:text-foreground">Home</Link>
@@ -88,10 +90,8 @@ export default function AppLayout({ children }) {
     <div className="flex flex-col h-full bg-background">
       <div className="flex items-center h-16 px-5 border-b">
         <Link to="/dashboard" onClick={onItemClick} className="flex items-center gap-2.5" data-testid="brand-logo">
-          <div className="relative w-8 h-8 rounded-lg bg-foreground flex items-center justify-center">
-            <Zap className="w-4 h-4 text-background" strokeWidth={2.5} />
-          </div>
-          <span className="font-bold text-foreground text-lg tracking-tight">GigVorx</span>
+          <Brand size={32} />
+          <span className="font-extrabold text-foreground text-lg tracking-tight">Gig<span className="text-gradient">Vorx</span></span>
         </Link>
       </div>
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
@@ -105,17 +105,16 @@ export default function AppLayout({ children }) {
         )}
       </div>
       {isTrial && (
-        <div className="m-3 p-4 rounded-xl bg-foreground text-background relative overflow-hidden" data-testid="trial-card">
-          <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-background/10" />
-          <Sparkles className="w-5 h-5 mb-2" />
+        <div className="m-3 p-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white relative overflow-hidden" data-testid="trial-card">
+          <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-blue-500/30 blur-xl" />
+          <Sparkles className="w-5 h-5 mb-2 text-sky-300" />
           <p className="font-semibold text-sm">{trialDays} {trialDays === 1 ? "day" : "days"} left in trial</p>
-          <p className="text-xs text-background/70 mt-0.5">Upgrade to keep your workflow.</p>
+          <p className="text-xs text-white/70 mt-0.5">Upgrade to keep your workflow.</p>
           <Button
             data-testid="sidebar-upgrade-btn"
             onClick={() => { onItemClick?.(); navigate("/pricing-app"); }}
             size="sm"
-            variant="secondary"
-            className="mt-3 w-full bg-background text-foreground hover:bg-background/90"
+            className="mt-3 w-full bg-white text-slate-900 hover:bg-white/90"
           >
             Upgrade Now
           </Button>
@@ -166,7 +165,7 @@ export default function AppLayout({ children }) {
               data-testid="header-upgrade-btn"
               size="sm"
               onClick={() => navigate("/pricing-app")}
-              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-sm"
+              className="bg-brand-gradient hover:opacity-90 text-white shadow-sm shadow-blue-500/20"
             >
               <Crown className="w-3.5 h-3.5 mr-1.5" />
               Upgrade
@@ -177,7 +176,7 @@ export default function AppLayout({ children }) {
                   data-testid="user-menu-trigger"
                   className="flex items-center gap-2 p-1.5 pr-2.5 rounded-lg hover:bg-muted transition-colors"
                 >
-                  <div className="w-7 h-7 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                  <div className="w-7 h-7 rounded-md bg-logo-gradient flex items-center justify-center text-white text-xs font-bold">
                     {initials}
                   </div>
                   <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />

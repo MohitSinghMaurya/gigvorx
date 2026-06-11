@@ -41,7 +41,7 @@ export default function Settings() {
           <div><Label>Name</Label><Input data-testid="settings-name" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} className="mt-1" /></div>
           <div><Label>Email</Label><Input data-testid="settings-email" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} className="mt-1" /></div>
         </div>
-        <Button onClick={saveProfile} data-testid="settings-save-profile" className="mt-4 bg-foreground text-background"><Save className="w-4 h-4 mr-1.5" />Save profile</Button>
+        <Button onClick={saveProfile} data-testid="settings-save-profile" className="mt-4 bg-brand-gradient text-white"><Save className="w-4 h-4 mr-1.5" />Save profile</Button>
       </Card>
 
       <Card className="p-6">
@@ -53,7 +53,7 @@ export default function Settings() {
           <div><Label>Phone</Label><Input data-testid="settings-biz-phone" value={business.phone} onChange={(e) => setBusiness({ ...business, phone: e.target.value })} className="mt-1" /></div>
           <div><Label>Address</Label><Textarea data-testid="settings-biz-address" rows={2} value={business.address} onChange={(e) => setBusiness({ ...business, address: e.target.value })} className="mt-1" /></div>
         </div>
-        <Button onClick={saveBusiness} data-testid="settings-save-biz" className="mt-4 bg-foreground text-background"><Save className="w-4 h-4 mr-1.5" />Save business</Button>
+        <Button onClick={saveBusiness} data-testid="settings-save-biz" className="mt-4 bg-brand-gradient text-white"><Save className="w-4 h-4 mr-1.5" />Save business</Button>
       </Card>
 
       <Card className="p-6">

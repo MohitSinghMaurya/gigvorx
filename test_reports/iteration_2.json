@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 2 (Leads pipeline + brand/theme + Supabase fallback) frontend E2E tested. Result: 19/20 features pass cleanly. Landing, Pricing, Login/Signup, Sidebar w/ nav-leads, Brand logo image, Dashboard, full Leads flow (add, kanban, list view, source filter, AI templates with placeholder fill, status-select move, drag-drop new_lead→contacted, won → converts & moves to /clients), Analytics (lead pipeline + leads-by-source), Briefs/Invoices regression, no console errors, localStorage fallback persistence all OK. Only one minor scoping concern in Admin platform-wide metrics.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Landing hero", "issues": ["Hero CTA 'Start 7-day free trial' is a dark/black solid button, while the top-right header 'Start free trial' is blue gradient. Spec implied the primary CTA should be blue gradient. Currently the secondary nav CTA is blue, hero CTA is black — visually a bit inverted. Not blocking."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Admin 'Lead pipeline (platform-wide)' card reads only the currently-logged-in admin's own localStorage. Even though Total Users = 2 (auth-list aggregated correctly), Total Leads Tracked / Users Using Pipeline / Avg Leads per User all show 0 while the demo user has lead data. For an honest 'platform-wide' view in the localStorage path, the Admin page should iterate over all users in gv_users and read each user's gv_v1:<userId>:clients key, then aggregate leads (isLead !== false). Currently reports per-admin only.",
+    "Consider swapping the landing-page hero CTA 'Start 7-day free trial' to the blue gradient (bg-brand-gradient) to match brand and the header CTA — currently it is a black/dark button."
+  ],
+  "critical_code_review_comments": [
+    "Leads.jsx (~385 lines) is approaching the soft 700-line limit but still ok; LeadCard could be moved to its own file for clarity.",
+    "Leads board: drag-drop relies on a single component-level draggedId state. If user drags one card and the drop fails silently, the state may not always reset. Consider also resetting in onDragEnd.",
+    "Admin.jsx 'platform-wide' lead stats appear to read only one user's storage in the localStorage fallback path (see action_items). When Supabase is enabled this likely works via SELECT on clients table, so the fallback is the gap.",
+    "AuthContext fallback: confirmed that with REACT_APP_SUPABASE_URL/KEY missing, login + signup + refresh + logout all work via localStorage and per-user data isolation is preserved (gv_v1:<userId>:clients)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "95%"},
+  "test_credentials": "Demo: demo@gigvorx.com / demo1234   |   Admin: admin@gigvorx.com / admin1234",
+  "seed_data_creation": "Created 1 lead 'Acme Founder' (Acme Co, SEO, ₹50,000, Instagram source) on demo user — then moved to Won so it now lives in /clients. Also a 'Drag Test' lead (DragCo, LinkedIn) which was dragged into the Contacted column.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Frontend-only iteration. Supabase env intentionally unset → app uses localStorage. All happy-paths verified including HTML5 drag-drop (src_card.drag_to(target_col) works because Leads page has draggable/onDragStart/onDrop wired up). AI templates: each [data-testid^=tmpl-] card contains the filled body (placeholders {name}/{company}/{service} replaced). 'Send on WhatsApp' opens wa.me only when lead.phone is set, else falls back to whatsappShare(). The lone gap is the admin platform-wide aggregation in the localStorage fallback (see action_items). Login flow needs localStorage.removeItem('gv_session') if previously logged in, otherwise /login auto-redirects to /dashboard.",
+  "rca of the issue": "Admin platform-wide leads = 0 even though demo has data → in /app/frontend/src/pages/Admin.jsx the lead-pipeline aggregation almost certainly uses the currently-mounted useCollection('clients') hook (scoped to current user via gv_v1:<userId>:clients) instead of reading from all user-scoped keys in localStorage. Fix: when Supabase is disabled, iterate Object.keys(localStorage) for the pattern /^gv_v1:.+:clients$/, JSON-parse each, and aggregate isLead!==false items. When Supabase is enabled, a simple SELECT will work."
+}
