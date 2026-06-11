@@ -88,7 +88,13 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     if (isSupabaseEnabled) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
+      if (error) {
+        const msg = error.message?.toLowerCase() || "";
+        if (msg.includes("invalid login") || msg.includes("invalid_credentials") || msg.includes("body stream")) {
+          throw new Error("Invalid email or password.");
+        }
+        throw new Error(error.message || "Sign in failed");
+      }
       const profile = await loadProfile(data.user);
       setUser(profile);
       return profile;
