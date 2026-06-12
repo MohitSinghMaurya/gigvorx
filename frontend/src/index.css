@@ -125,3 +125,4 @@ code, .font-mono {
 
 /* Pipeline column scroll */
 .pipeline-col { scrollbar-width: thin; }
+#emergent-badge { display: none !important; }
