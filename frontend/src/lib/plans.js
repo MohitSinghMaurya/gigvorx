@@ -1,8 +1,9 @@
-export const PLANS = [
+export const PLANS_INR = [
   {
     id: "starter",
     name: "Starter",
     price: 499,
+    priceUSD: 5,
     period: "/mo",
     description: "For freelancers just getting started",
     badge: null,
@@ -21,6 +22,7 @@ export const PLANS = [
     id: "pro",
     name: "Pro",
     price: 999,
+    priceUSD: 12,
     period: "/mo",
     description: "For serious freelancers and small studios",
     badge: "Most Popular",
@@ -40,6 +42,7 @@ export const PLANS = [
     id: "premium",
     name: "Premium",
     price: 1699,
+    priceUSD: 18,
     period: "/mo",
     description: "For power users who want it all",
     badge: null,
@@ -58,6 +61,7 @@ export const PLANS = [
     id: "agency",
     name: "Agency",
     price: 3000,
+    priceUSD: 35,
     period: "/mo",
     description: "For growing agencies and teams",
     badge: "Best for Agencies",
@@ -74,6 +78,9 @@ export const PLANS = [
     ],
   },
 ];
+
+// Keep PLANS as default export pointing to INR for backward compatibility
+export const PLANS = PLANS_INR;
 
 export const COMPARISON_ROWS = [
   { label: "Active clients", values: ["10", "Unlimited", "Unlimited", "Unlimited"] },
