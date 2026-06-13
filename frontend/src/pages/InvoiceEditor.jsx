@@ -203,20 +203,50 @@ export default function InvoiceEditor() {
               <Button size="sm" variant="outline" onClick={addItem} data-testid="inv-add-item"><Plus className="w-3.5 h-3.5 mr-1" />Add item</Button>
             </div>
             <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs uppercase tracking-wider text-muted-foreground font-semibold px-1">
-                <div className="col-span-5">Description</div>
-                <div className="col-span-2 text-right">Qty</div>
-                <div className="col-span-2 text-right">Rate</div>
-                <div className="col-span-3 text-right">Amount</div>
-              </div>
+              
               {form.items.map((it, i) => (
-                <div key={it.id} className="grid grid-cols-12 gap-2 items-center group">
-                  <Input data-testid={`item-desc-${i}`} className="col-span-5" placeholder="Item or service" value={it.description} onChange={(e) => setItem(it.id, { description: e.target.value })} />
-                  <Input data-testid={`item-qty-${i}`} className="col-span-2 text-right" type="number" value={it.quantity} onChange={(e) => setItem(it.id, { quantity: e.target.value })} />
-                  <Input data-testid={`item-rate-${i}`} className="col-span-2 text-right" type="number" value={it.rate} onChange={(e) => setItem(it.id, { rate: e.target.value })} />
-                  <div className="col-span-3 flex flex-col items-end gap-1">
-  <span className="text-sm font-medium tabular-nums truncate max-w-full">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0))}</span>
-  <button onClick={() => removeItem(it.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" data-testid={`item-remove-${i}`}><Trash2 className="w-3.5 h-3.5" /></button>
+                <div key={it.id} className="border rounded-lg p-3 space-y-2 group relative">
+  <Input
+    data-testid={`item-desc-${i}`}
+    placeholder="Item or service"
+    value={it.description}
+    onChange={(e) => setItem(it.id, { description: e.target.value })}
+  />
+  <div className="grid grid-cols-3 gap-2 items-center">
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground uppercase tracking-wider">Qty</p>
+      <Input
+        data-testid={`item-qty-${i}`}
+        type="number"
+        value={it.quantity}
+        onChange={(e) => setItem(it.id, { quantity: e.target.value })}
+      />
+    </div>
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground uppercase tracking-wider">Rate</p>
+      <Input
+        data-testid={`item-rate-${i}`}
+        type="number"
+        value={it.rate}
+        onChange={(e) => setItem(it.id, { rate: e.target.value })}
+      />
+    </div>
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground uppercase tracking-wider">Amount</p>
+      <div className="h-9 px-3 rounded-md border bg-muted/30 flex items-center justify-end">
+        <span className="text-sm font-semibold tabular-nums">
+          {formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0))}
+        </span>
+      </div>
+    </div>
+  </div>
+  <button
+    onClick={() => removeItem(it.id)}
+    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+    data-testid={`item-remove-${i}`}
+  >
+    <Trash2 className="w-3.5 h-3.5" />
+  </button>
 </div>
                 </div>
               ))}
