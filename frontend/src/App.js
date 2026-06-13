@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { Toaster } from "@/components/ui/sonner";
 import AppLayout from "@/layouts/AppLayout";
 import PublicLayout from "@/layouts/PublicLayout";
@@ -75,8 +76,10 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
-        <Toaster position="top-right" richColors />
+        <CurrencyProvider>
+          <AppRoutes />
+          <Toaster position="top-right" richColors />
+        </CurrencyProvider>
       </AuthProvider>
     </BrowserRouter>
   );
