@@ -204,20 +204,20 @@ export default function InvoiceEditor() {
             </div>
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-2 text-xs uppercase tracking-wider text-muted-foreground font-semibold px-1">
-                <div className="col-span-6">Description</div>
+                <div className="col-span-5">Description</div>
                 <div className="col-span-2 text-right">Qty</div>
                 <div className="col-span-2 text-right">Rate</div>
-                <div className="col-span-2 text-right">Amount</div>
+                <div className="col-span-3 text-right">Amount</div>
               </div>
               {form.items.map((it, i) => (
                 <div key={it.id} className="grid grid-cols-12 gap-2 items-center group">
-                  <Input data-testid={`item-desc-${i}`} className="col-span-6" placeholder="Item or service" value={it.description} onChange={(e) => setItem(it.id, { description: e.target.value })} />
+                  <Input data-testid={`item-desc-${i}`} className="col-span-5" placeholder="Item or service" value={it.description} onChange={(e) => setItem(it.id, { description: e.target.value })} />
                   <Input data-testid={`item-qty-${i}`} className="col-span-2 text-right" type="number" value={it.quantity} onChange={(e) => setItem(it.id, { quantity: e.target.value })} />
                   <Input data-testid={`item-rate-${i}`} className="col-span-2 text-right" type="number" value={it.rate} onChange={(e) => setItem(it.id, { rate: e.target.value })} />
-                  <div className="col-span-2 flex items-center justify-end gap-1">
-                    <span className="text-sm font-medium tabular-nums">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0))}</span>
-                    <button onClick={() => removeItem(it.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" data-testid={`item-remove-${i}`}><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
+                  <div className="col-span-3 flex flex-col items-end gap-1">
+  <span className="text-sm font-medium tabular-nums truncate max-w-full">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0))}</span>
+  <button onClick={() => removeItem(it.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" data-testid={`item-remove-${i}`}><Trash2 className="w-3.5 h-3.5" /></button>
+</div>
                 </div>
               ))}
             </div>
