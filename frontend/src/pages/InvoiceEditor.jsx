@@ -212,7 +212,7 @@ export default function InvoiceEditor() {
                     value={it.description}
                     onChange={(e) => setItem(it.id, { description: e.target.value })}
                   />
-                  <div className="grid grid-cols-3 gap-2 items-center">
+                  <div className="grid grid-cols-1 gap-2">
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider">Qty</p>
                       <Input
