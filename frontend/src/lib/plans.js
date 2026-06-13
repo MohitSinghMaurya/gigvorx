@@ -68,7 +68,7 @@ export const PLANS_INR = [
     limits: { clients: Infinity, briefs: Infinity, invoices: Infinity, niches: 17, branding: true, team: Infinity },
     features: [
       "Everything in Premium",
-      "Unlimited team members",
+      "Up to 10 team members",
       "White-label invoices & briefs",
       "Client portal access",
       "API access (coming soon)",
@@ -90,7 +90,7 @@ export const COMPARISON_ROWS = [
   { label: "Custom branding (logo, UPI, QR)", values: ["—", "✓", "✓", "✓"] },
   { label: "WhatsApp & PDF sharing", values: ["✓", "✓", "✓", "✓"] },
   { label: "Analytics dashboard", values: ["Basic", "Full", "Advanced", "Advanced"] },
-  { label: "Team members", values: ["1", "1", "3", "Unlimited"] },
+  { label: "Team members", values: ["1", "1", "3", "10"] },
   { label: "AI brief generation", values: ["—", "—", "Coming soon", "Coming soon"] },
   { label: "White-label", values: ["—", "—", "—", "✓"] },
   { label: "Priority support", values: ["—", "✓", "✓", "Dedicated"] },
