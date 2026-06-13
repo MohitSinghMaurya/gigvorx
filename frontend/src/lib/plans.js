@@ -2,7 +2,7 @@ export const PLANS = [
   {
     id: "starter",
     name: "Starter",
-    price: 999,
+    price: 499,
     period: "/mo",
     description: "For freelancers just getting started",
     badge: null,
@@ -20,7 +20,7 @@ export const PLANS = [
   {
     id: "pro",
     name: "Pro",
-    price: 499,
+    price: 999,
     period: "/mo",
     description: "For serious freelancers and small studios",
     badge: "Most Popular",
