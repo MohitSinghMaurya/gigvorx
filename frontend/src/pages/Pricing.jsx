@@ -6,10 +6,12 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
+import { useState } from "react";
 
 export default function Pricing({ inApp = false }) {
   const { user, upgradePlan } = useAuth();
   const navigate = useNavigate();
+  const [currency, setCurrency] = useState("INR");
 
   const handleSelect = (planId) => {
     if (!user) {
@@ -21,6 +23,11 @@ export default function Pricing({ inApp = false }) {
     if (inApp) navigate("/dashboard");
   };
 
+  const getPrice = (plan) => {
+    if (currency === "USD") return `$${plan.priceUSD}`;
+    return `₹${plan.price.toLocaleString("en-IN")}`;
+  };
+
   return (
     <div className={inApp ? "" : "py-20"}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -28,6 +35,30 @@ export default function Pricing({ inApp = false }) {
           <Badge variant="outline" className="mb-4"><Sparkles className="w-3 h-3 mr-1.5" />Simple pricing, no surprises</Badge>
           <h1 className="text-4xl lg:text-5xl font-bold tracking-tight">Pick a plan that grows with you.</h1>
           <p className="mt-4 text-lg text-muted-foreground">Start with Starter. Upgrade anytime. All upcoming features and updates are included on every active subscription.</p>
+
+          {/* Currency Toggle */}
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <button
+              onClick={() => setCurrency("INR")}
+              className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+                currency === "INR"
+                  ? "bg-foreground text-background shadow-md"
+                  : "border border-border text-muted-foreground hover:border-foreground/40"
+              }`}
+            >
+              ₹ INR
+            </button>
+            <button
+              onClick={() => setCurrency("USD")}
+              className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+                currency === "USD"
+                  ? "bg-foreground text-background shadow-md"
+                  : "border border-border text-muted-foreground hover:border-foreground/40"
+              }`}
+            >
+              $ USD
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-20">
@@ -52,7 +83,7 @@ export default function Pricing({ inApp = false }) {
                 <h3 className="text-lg font-bold">{plan.name}</h3>
                 <p className="text-xs text-muted-foreground mt-1 min-h-[32px]">{plan.description}</p>
                 <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold tracking-tight">₹{plan.price.toLocaleString("en-IN")}</span>
+                  <span className="text-4xl font-extrabold tracking-tight">{getPrice(plan)}</span>
                   <span className="text-muted-foreground text-sm">{plan.period}</span>
                 </div>
                 <Button
