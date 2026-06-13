@@ -18,9 +18,14 @@ export default function PublicLayout({ children }) {
   };
 
   const scrollToReviews = () => {
-    setOpen(false);
-    const el = document.getElementById("testimonials");
-    if (el) el.scrollIntoView({ behavior: "smooth" });
+  setOpen(false);
+  const el = document.getElementById("testimonials");
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth" });
+  } else {
+    navigate("/?scroll=reviews");
+  }
+};
   };
 
   return (
