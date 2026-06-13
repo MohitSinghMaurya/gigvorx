@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useCollection, useInvoiceNumber } from "@/lib/useCollection";
 import { readSetting } from "@/lib/storage";
 import { formatCurrency, formatDate, whatsappShare } from "@/lib/format";
@@ -37,6 +38,7 @@ export default function InvoiceEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currency } = useCurrency();
   const { items: clients } = useCollection("clients");
   const invoices = useCollection("invoices");
   const nextNum = useInvoiceNumber();
@@ -120,7 +122,7 @@ export default function InvoiceEditor() {
   };
 
   const shareWA = () => {
-    const msg = `📄 Invoice ${form.invoiceNumber}\n${form.business.name} → ${form.clientName}\nAmount: ${formatCurrency(totals.total)}\nDue: ${formatDate(form.dueDate)}\n${form.upiId ? `\nPay via UPI: ${form.upiId}` : ""}\n\nFull invoice attached.`;
+    const msg = `📄 Invoice ${form.invoiceNumber}\n${form.business.name} → ${form.clientName}\nAmount: ${formatCurrency(totals.total, currency)}\nDue: ${formatDate(form.dueDate)}\n${form.upiId ? `\nPay via UPI: ${form.upiId}` : ""}\n\nFull invoice attached.`;
     whatsappShare(msg);
   };
 
@@ -142,7 +144,6 @@ export default function InvoiceEditor() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Editor */}
         <div className="lg:col-span-2 space-y-5">
           <Card className="p-5">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-3 block">Template</Label>
@@ -203,52 +204,50 @@ export default function InvoiceEditor() {
               <Button size="sm" variant="outline" onClick={addItem} data-testid="inv-add-item"><Plus className="w-3.5 h-3.5 mr-1" />Add item</Button>
             </div>
             <div className="space-y-2">
-              
               {form.items.map((it, i) => (
                 <div key={it.id} className="border rounded-lg p-3 space-y-2 group relative">
-  <Input
-    data-testid={`item-desc-${i}`}
-    placeholder="Item or service"
-    value={it.description}
-    onChange={(e) => setItem(it.id, { description: e.target.value })}
-  />
-  <div className="grid grid-cols-3 gap-2 items-center">
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground uppercase tracking-wider">Qty</p>
-      <Input
-        data-testid={`item-qty-${i}`}
-        type="number"
-        value={it.quantity}
-        onChange={(e) => setItem(it.id, { quantity: e.target.value })}
-      />
-    </div>
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground uppercase tracking-wider">Rate</p>
-      <Input
-        data-testid={`item-rate-${i}`}
-        type="number"
-        value={it.rate}
-        onChange={(e) => setItem(it.id, { rate: e.target.value })}
-      />
-    </div>
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground uppercase tracking-wider">Amount</p>
-      <div className="h-9 px-3 rounded-md border bg-muted/30 flex items-center justify-end">
-        <span className="text-sm font-semibold tabular-nums">
-          {formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0))}
-        </span>
-      </div>
-    </div>
-  </div>
-  <button
-    onClick={() => removeItem(it.id)}
-    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-    data-testid={`item-remove-${i}`}
-  >
-    <Trash2 className="w-3.5 h-3.5" />
-  </button>
-</div>
-                
+                  <Input
+                    data-testid={`item-desc-${i}`}
+                    placeholder="Item or service"
+                    value={it.description}
+                    onChange={(e) => setItem(it.id, { description: e.target.value })}
+                  />
+                  <div className="grid grid-cols-3 gap-2 items-center">
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Qty</p>
+                      <Input
+                        data-testid={`item-qty-${i}`}
+                        type="number"
+                        value={it.quantity}
+                        onChange={(e) => setItem(it.id, { quantity: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Rate</p>
+                      <Input
+                        data-testid={`item-rate-${i}`}
+                        type="number"
+                        value={it.rate}
+                        onChange={(e) => setItem(it.id, { rate: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Amount</p>
+                      <div className="h-9 px-3 rounded-md border bg-muted/30 flex items-center justify-end">
+                        <span className="text-sm font-semibold tabular-nums">
+                          {formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0), currency)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeItem(it.id)}
+                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                    data-testid={`item-remove-${i}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               ))}
             </div>
           </Card>
@@ -268,8 +267,8 @@ export default function InvoiceEditor() {
             <h3 className="font-semibold">Payment & branding</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label>UPI ID / Payment ID</Label>
-                <Input data-testid="inv-upi" placeholder="yourname@upi" value={form.upiId} onChange={(e) => setField("upiId", e.target.value)} className="mt-1" />
+                <Label>{currency === "INR" ? "UPI ID / Payment ID" : "PayPal / Stripe Link"}</Label>
+                <Input data-testid="inv-upi" placeholder={currency === "INR" ? "yourname@upi" : "https://paypal.me/yourname"} value={form.upiId} onChange={(e) => setField("upiId", e.target.value)} className="mt-1" />
               </div>
               <div>
                 <Label>Logo</Label>
@@ -279,14 +278,16 @@ export default function InvoiceEditor() {
                   <input data-testid="inv-logo" type="file" accept="image/*" className="hidden" onChange={(e) => handleImage(e.target.files?.[0], "logo")} />
                 </label>
               </div>
-              <div className="md:col-span-2">
-                <Label>UPI QR image</Label>
-                <label className="mt-1 flex items-center gap-2 h-9 px-3 rounded-md border bg-background cursor-pointer hover:border-foreground/40 text-sm">
-                  <QrCode className="w-4 h-4" />
-                  {form.qrImage ? "Replace QR" : "Upload QR (optional)"}
-                  <input data-testid="inv-qr" type="file" accept="image/*" className="hidden" onChange={(e) => handleImage(e.target.files?.[0], "qrImage")} />
-                </label>
-              </div>
+              {currency === "INR" && (
+                <div className="md:col-span-2">
+                  <Label>UPI QR image</Label>
+                  <label className="mt-1 flex items-center gap-2 h-9 px-3 rounded-md border bg-background cursor-pointer hover:border-foreground/40 text-sm">
+                    <QrCode className="w-4 h-4" />
+                    {form.qrImage ? "Replace QR" : "Upload QR (optional)"}
+                    <input data-testid="inv-qr" type="file" accept="image/*" className="hidden" onChange={(e) => handleImage(e.target.files?.[0], "qrImage")} />
+                  </label>
+                </div>
+              )}
             </div>
             <div>
               <Label>Notes</Label>
@@ -299,12 +300,11 @@ export default function InvoiceEditor() {
           </Card>
         </div>
 
-        {/* Live preview pane */}
         <div className="lg:sticky lg:top-24 h-fit">
           <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Live preview</p>
           <div className="rounded-xl border bg-white overflow-hidden shadow-sm">
             <div ref={previewRef} className="p-6 text-[11px] leading-tight" style={{ minHeight: 500 }}>
-              <InvoiceTemplate template={Tmpl} form={form} totals={totals} />
+              <InvoiceTemplate template={Tmpl} form={form} totals={totals} currency={currency} />
             </div>
           </div>
           <Badge className={`mt-3 ${STATUS_STYLES[form.status]} capitalize`}>{form.status}</Badge>
@@ -314,7 +314,7 @@ export default function InvoiceEditor() {
       <Dialog open={preview} onOpenChange={setPreview}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white p-0">
           <DialogHeader className="px-6 pt-6"><DialogTitle>Invoice preview</DialogTitle></DialogHeader>
-          <div className="p-8"><InvoiceTemplate template={Tmpl} form={form} totals={totals} large /></div>
+          <div className="p-8"><InvoiceTemplate template={Tmpl} form={form} totals={totals} currency={currency} large /></div>
         </DialogContent>
       </Dialog>
 
@@ -337,7 +337,7 @@ export default function InvoiceEditor() {
   );
 }
 
-function InvoiceTemplate({ template, form, totals, large = false }) {
+function InvoiceTemplate({ template, form, totals, currency = "INR", large = false }) {
   const sz = large ? "text-sm" : "text-[11px]";
   if (template === "modern") {
     return (
@@ -353,7 +353,7 @@ function InvoiceTemplate({ template, form, totals, large = false }) {
             <Badge className={`mt-1 ${form.status === "paid" ? "bg-emerald-400" : form.status === "overdue" ? "bg-rose-400" : "bg-white/20"} text-white capitalize`}>{form.status}</Badge>
           </div>
         </div>
-        <BodyBlock form={form} totals={totals} large={large} />
+        <BodyBlock form={form} totals={totals} currency={currency} large={large} />
       </div>
     );
   }
@@ -370,11 +370,10 @@ function InvoiceTemplate({ template, form, totals, large = false }) {
             <p className="text-gray-500">{formatDate(form.issueDate)}</p>
           </div>
         </div>
-        <BodyBlock form={form} totals={totals} large={large} />
+        <BodyBlock form={form} totals={totals} currency={currency} large={large} />
       </div>
     );
   }
-  // classic
   return (
     <div className={`${sz} text-gray-900`}>
       <div className="flex items-start justify-between mb-6">
@@ -389,12 +388,12 @@ function InvoiceTemplate({ template, form, totals, large = false }) {
           <Badge className={`mt-1 capitalize ${form.status === "paid" ? "bg-emerald-600" : form.status === "overdue" ? "bg-rose-600" : "bg-gray-200 text-gray-700"} text-white`}>{form.status}</Badge>
         </div>
       </div>
-      <BodyBlock form={form} totals={totals} large={large} />
+      <BodyBlock form={form} totals={totals} currency={currency} large={large} />
     </div>
   );
 }
 
-function BodyBlock({ form, totals, large }) {
+function BodyBlock({ form, totals, currency = "INR", large }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-4 mb-5">
@@ -424,27 +423,27 @@ function BodyBlock({ form, totals, large }) {
             <tr key={it.id} className="border-b">
               <td className="p-2">{it.description || "—"}</td>
               <td className="p-2 text-right">{it.quantity}</td>
-              <td className="p-2 text-right tabular-nums">{formatCurrency(it.rate)}</td>
-              <td className="p-2 text-right font-medium tabular-nums">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0))}</td>
+              <td className="p-2 text-right tabular-nums">{formatCurrency(it.rate, currency)}</td>
+              <td className="p-2 text-right font-medium tabular-nums">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0), currency)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="flex justify-end mb-6">
         <div className="w-56 space-y-1">
-          <div className="flex justify-between text-gray-600"><span>Subtotal</span><span className="tabular-nums">{formatCurrency(totals.subtotal)}</span></div>
-          {totals.discountAmt > 0 && <div className="flex justify-between text-emerald-600"><span>Discount ({form.discount}%)</span><span className="tabular-nums">−{formatCurrency(totals.discountAmt)}</span></div>}
-          <div className="flex justify-between text-gray-600"><span>Tax ({form.taxRate}%)</span><span className="tabular-nums">{formatCurrency(totals.taxAmt)}</span></div>
-          <div className="flex justify-between font-bold text-base pt-2 border-t mt-1"><span>Total</span><span className="tabular-nums">{formatCurrency(totals.total)}</span></div>
+          <div className="flex justify-between text-gray-600"><span>Subtotal</span><span className="tabular-nums">{formatCurrency(totals.subtotal, currency)}</span></div>
+          {totals.discountAmt > 0 && <div className="flex justify-between text-emerald-600"><span>Discount ({form.discount}%)</span><span className="tabular-nums">−{formatCurrency(totals.discountAmt, currency)}</span></div>}
+          <div className="flex justify-between text-gray-600"><span>Tax ({form.taxRate}%)</span><span className="tabular-nums">{formatCurrency(totals.taxAmt, currency)}</span></div>
+          <div className="flex justify-between font-bold text-base pt-2 border-t mt-1"><span>Total</span><span className="tabular-nums">{formatCurrency(totals.total, currency)}</span></div>
         </div>
       </div>
       {(form.upiId || form.qrImage) && (
         <div className="p-3 rounded-md bg-gray-50 border mb-5 flex items-center gap-3">
-          {form.qrImage && <img src={form.qrImage} alt="QR" className="w-16 h-16 object-contain bg-white rounded border" />}
+          {form.qrImage && currency === "INR" && <img src={form.qrImage} alt="QR" className="w-16 h-16 object-contain bg-white rounded border" />}
           <div className="text-[10px]">
-            <p className="font-semibold uppercase tracking-wider text-gray-500">Pay via UPI</p>
+            <p className="font-semibold uppercase tracking-wider text-gray-500">{currency === "INR" ? "Pay via UPI" : "Payment Link"}</p>
             {form.upiId && <p className="font-mono mt-0.5">{form.upiId}</p>}
-            {form.qrImage && <p className="text-gray-500">Scan the QR with any UPI app</p>}
+            {form.qrImage && currency === "INR" && <p className="text-gray-500">Scan the QR with any UPI app</p>}
           </div>
         </div>
       )}
