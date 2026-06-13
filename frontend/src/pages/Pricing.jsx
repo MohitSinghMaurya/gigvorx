@@ -1,28 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
 import { PLANS, COMPARISON_ROWS } from "@/lib/plans";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
 
 export default function Pricing({ inApp = false }) {
   const { user, upgradePlan } = useAuth();
+  const { currency, setCurrency } = useCurrency();
   const navigate = useNavigate();
-  const [currency, setCurrency] = useState("INR");
-
-useEffect(() => {
-  fetch("https://ipapi.co/json/")
-    .then(res => res.json())
-    .then(data => {
-      if (data.country_code !== "IN") {
-        setCurrency("USD");
-      }
-    })
-    .catch(() => {});
-}, []);
 
   const handleSelect = (planId) => {
     if (!user) {
@@ -119,7 +108,6 @@ useEffect(() => {
           })}
         </div>
 
-        {/* Comparison table */}
         <div className="mb-12">
           <h2 className="text-2xl font-bold tracking-tight mb-6 text-center">Compare features</h2>
           <div className="overflow-x-auto border rounded-2xl bg-background">
