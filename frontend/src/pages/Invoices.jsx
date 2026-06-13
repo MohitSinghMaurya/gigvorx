@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCollection } from "@/lib/useCollection";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -21,6 +22,7 @@ const STATUS_STYLES = {
 };
 
 export default function Invoices() {
+  const { currency } = useCurrency();
   const { items, remove } = useCollection("invoices");
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -90,7 +92,7 @@ export default function Invoices() {
                     <td className="p-4">{inv.clientName || "—"}</td>
                     <td className="p-4 text-muted-foreground">{formatDate(inv.issueDate || inv.createdAt)}</td>
                     <td className="p-4 text-muted-foreground">{formatDate(inv.dueDate)}</td>
-                    <td className="p-4 text-right font-semibold">{formatCurrency(inv.total || 0)}</td>
+                    <td className="p-4 text-right font-semibold">{formatCurrency(inv.total || 0, currency)}</td>
                     <td className="p-4 text-center">
                       <Badge variant="outline" className={`capitalize ${STATUS_STYLES[inv.status || "draft"]}`}>{inv.status || "draft"}</Badge>
                     </td>
