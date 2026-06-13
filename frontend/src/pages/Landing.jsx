@@ -69,7 +69,7 @@ export default function Landing() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x">
                 {[
-                  { label: "Total revenue", value: "₹4,82,500", trend: "+24%" },
+                  { label: "Total revenue", value: "₹4,82,500 / $5,800", trend: "+24%" },
                   { label: "Active clients", value: "37", trend: "+6" },
                   { label: "Briefs sent", value: "128", trend: "+18" },
                 ].map(s => (
