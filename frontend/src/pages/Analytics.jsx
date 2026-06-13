@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useCollection } from "@/lib/useCollection";
 import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { LEAD_SOURCES, findSource } from "@/lib/pipeline";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, Users, FileText, Receipt, CheckCircle2, Clock, AlertCircle, Percent, Target, PartyPopper, Zap, ArrowRightLeft } from "lucide-react";
@@ -26,6 +27,7 @@ function Bar({ value, max, color }) {
 }
 
 export default function Analytics() {
+  const { currency } = useCurrency();
   const { items: contacts } = useCollection("clients");
   const { items: briefs } = useCollection("briefs");
   const { items: invoices } = useCollection("invoices");
@@ -93,10 +95,10 @@ export default function Analytics() {
       <div>
         <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-3">Revenue</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Stat label="Revenue" value={formatCurrency(data.revenue)} sub={`${data.paid.length} paid`} icon={TrendingUp} accent="bg-emerald-600" />
-          <Stat label="Pending" value={formatCurrency(data.pendingAmt)} sub={`${data.pending.length} awaiting`} icon={Clock} accent="bg-amber-500" />
-          <Stat label="Overdue" value={formatCurrency(data.overdueAmt)} sub={`${data.overdue.length} overdue`} icon={AlertCircle} accent="bg-rose-600" />
-          <Stat label="Won deals value" value={formatCurrency(data.wonRevenue)} sub={`${data.won.length} won leads`} icon={PartyPopper} accent="bg-brand-gradient" />
+          <Stat label="Revenue" value={formatCurrency(data.revenue, currency)} sub={`${data.paid.length} paid`} icon={TrendingUp} accent="bg-emerald-600" />
+          <Stat label="Pending" value={formatCurrency(data.pendingAmt, currency)} sub={`${data.pending.length} awaiting`} icon={Clock} accent="bg-amber-500" />
+          <Stat label="Overdue" value={formatCurrency(data.overdueAmt, currency)} sub={`${data.overdue.length} overdue`} icon={AlertCircle} accent="bg-rose-600" />
+          <Stat label="Won deals value" value={formatCurrency(data.wonRevenue, currency)} sub={`${data.won.length} won leads`} icon={PartyPopper} accent="bg-brand-gradient" />
         </div>
       </div>
 
@@ -130,7 +132,7 @@ export default function Analytics() {
               <h3 className="font-bold text-lg">Revenue · last 6 months</h3>
               <p className="text-xs text-muted-foreground">Based on invoices marked as paid.</p>
             </div>
-            <p className="text-2xl font-bold tracking-tight">{formatCurrency(data.revenue)}</p>
+            <p className="text-2xl font-bold tracking-tight">{formatCurrency(data.revenue, currency)}</p>
           </div>
           <div className="flex items-end gap-3 h-48">
             {data.months.map(m => {

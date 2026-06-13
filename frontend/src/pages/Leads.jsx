@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCollection } from "@/lib/useCollection";
 import { formatCurrency, formatDate, whatsappShare } from "@/lib/format";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { LEAD_STATUSES, LEAD_SOURCES, findStatus, findSource, MESSAGE_TEMPLATES, fillTemplate } from "@/lib/pipeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,9 +35,10 @@ function emptyLead() {
 }
 
 export default function Leads() {
+  const { currency } = useCurrency();
   const { items, create, update, remove, loading } = useCollection("clients");
   const navigate = useNavigate();
-  const [view, setView] = useState("board"); // board | list
+  const [view, setView] = useState("board");
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [editing, setEditing] = useState(null);
@@ -120,8 +122,8 @@ export default function Leads() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total leads", value: totals.total, sub: "All pipeline", icon: Target, accent: "bg-brand-gradient" },
-          { label: "Pipeline value", value: formatCurrency(totals.pipeValue), sub: "Open opportunities", icon: IndianRupee, accent: "bg-sky-500" },
-          { label: "Won value", value: formatCurrency(totals.wonValue), sub: "Closed deals", icon: PartyPopper, accent: "bg-emerald-500" },
+          { label: "Pipeline value", value: formatCurrency(totals.pipeValue, currency), sub: "Open opportunities", icon: IndianRupee, accent: "bg-sky-500" },
+          { label: "Won value", value: formatCurrency(totals.wonValue, currency), sub: "Closed deals", icon: PartyPopper, accent: "bg-emerald-500" },
           { label: "Conversion rate", value: totals.conv + "%", sub: "Lead → Won", icon: ArrowRightLeft, accent: "bg-indigo-500" },
         ].map(s => (
           <Card key={s.label} className="p-5">
@@ -148,7 +150,6 @@ export default function Leads() {
         </select>
       </div>
 
-      {/* Empty state */}
       {leads.length === 0 && !loading && (
         <Card className="p-12 text-center border-dashed">
           <Target className="w-10 h-10 mx-auto text-muted-foreground/40 mb-4" />
@@ -158,7 +159,6 @@ export default function Leads() {
         </Card>
       )}
 
-      {/* Board view */}
       {view === "board" && leads.length > 0 && (
         <div className="overflow-x-auto -mx-4 px-4">
           <div className="flex gap-4 min-w-max pb-4">
@@ -184,6 +184,7 @@ export default function Leads() {
                       <LeadCard
                         key={l.id}
                         lead={l}
+                        currency={currency}
                         onDragStart={() => setDraggedId(l.id)}
                         onEdit={() => openEditor(l)}
                         onTemplates={() => setTemplateLead(l)}
@@ -200,7 +201,6 @@ export default function Leads() {
         </div>
       )}
 
-      {/* List view */}
       {view === "list" && leads.length > 0 && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
@@ -227,7 +227,7 @@ export default function Leads() {
                       </td>
                       <td className="p-4"><Badge className={`${st.color} capitalize`} variant="outline">{st.label}</Badge></td>
                       <td className="p-4 text-muted-foreground">{src?.label || "—"}</td>
-                      <td className="p-4 text-right font-semibold">{l.estimatedValue ? formatCurrency(l.estimatedValue) : "—"}</td>
+                      <td className="p-4 text-right font-semibold">{l.estimatedValue ? formatCurrency(l.estimatedValue, currency) : "—"}</td>
                       <td className="p-4 text-muted-foreground">{l.followUpDate ? formatDate(l.followUpDate) : "—"}</td>
                       <td className="p-4">
                         <div className="flex gap-1 justify-end">
@@ -245,7 +245,6 @@ export default function Leads() {
         </Card>
       )}
 
-      {/* Edit/Create drawer */}
       <Dialog open={drawerOpen} onOpenChange={(o) => !o && closeEditor()}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -260,7 +259,7 @@ export default function Leads() {
                 <div><Label>Email</Label><Input data-testid="lead-email" type="email" value={editing.email || ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} className="mt-1" /></div>
                 <div><Label>Phone</Label><Input data-testid="lead-phone" value={editing.phone || ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} className="mt-1" /></div>
                 <div><Label>Service / Niche</Label><Input data-testid="lead-service" value={editing.service || ""} onChange={(e) => setEditing({ ...editing, service: e.target.value })} placeholder="e.g. SEO" className="mt-1" /></div>
-                <div><Label>Estimated value (₹)</Label><Input data-testid="lead-value" type="number" value={editing.estimatedValue || ""} onChange={(e) => setEditing({ ...editing, estimatedValue: e.target.value })} className="mt-1" /></div>
+                <div><Label>Estimated value ({currency === "INR" ? "₹" : "$"})</Label><Input data-testid="lead-value" type="number" value={editing.estimatedValue || ""} onChange={(e) => setEditing({ ...editing, estimatedValue: e.target.value })} className="mt-1" /></div>
                 <div>
                   <Label>Status</Label>
                   <select data-testid="lead-status" value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm">
@@ -290,7 +289,6 @@ export default function Leads() {
         </DialogContent>
       </Dialog>
 
-      {/* AI Templates dialog */}
       <Dialog open={!!templateLead} onOpenChange={(o) => !o && setTemplateLead(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -342,7 +340,7 @@ export default function Leads() {
   );
 }
 
-function LeadCard({ lead, onDragStart, onEdit, onTemplates, onDelete, onMove }) {
+function LeadCard({ lead, currency, onDragStart, onEdit, onTemplates, onDelete, onMove }) {
   const st = findStatus(lead.status);
   const src = findSource(lead.leadSource);
   return (
@@ -363,7 +361,7 @@ function LeadCard({ lead, onDragStart, onEdit, onTemplates, onDelete, onMove }) 
       {lead.company && <p className="text-xs text-muted-foreground">{lead.company}</p>}
       <div className="flex flex-wrap items-center gap-1.5 mt-2">
         {src && <Badge variant="outline" className="text-[10px] h-5 px-1.5">{src.label}</Badge>}
-        {lead.estimatedValue && <span className="text-xs font-mono font-semibold text-blue-600">{formatCurrency(lead.estimatedValue)}</span>}
+        {lead.estimatedValue && <span className="text-xs font-mono font-semibold text-blue-600">{formatCurrency(lead.estimatedValue, currency)}</span>}
       </div>
       {lead.followUpDate && (
         <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1"><Calendar className="w-3 h-3" />Follow-up {formatDate(lead.followUpDate)}</p>

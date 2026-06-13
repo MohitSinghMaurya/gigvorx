@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useCollection } from "@/lib/useCollection";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Card } from "@/components/ui/card";
@@ -30,6 +31,7 @@ function StatCard({ label, value, sub, icon: Icon, accent, testid }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { currency } = useCurrency();
   const { items: clients } = useCollection("clients");
   const { items: briefs } = useCollection("briefs");
   const { items: invoices } = useCollection("invoices");
@@ -72,8 +74,8 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard testid="stat-revenue" label="Revenue (paid)" value={formatCurrency(stats.revenue)} sub={`${stats.paid.length} invoices paid`} icon={TrendingUp} accent="bg-emerald-600" />
-        <StatCard testid="stat-pending" label="Pending" value={formatCurrency(stats.pendingAmt)} sub={`${stats.pending.length} awaiting`} icon={Clock} accent="bg-amber-500" />
+        <StatCard testid="stat-revenue" label="Revenue (paid)" value={formatCurrency(stats.revenue, currency)} sub={`${stats.paid.length} invoices paid`} icon={TrendingUp} accent="bg-emerald-600" />
+        <StatCard testid="stat-pending" label="Pending" value={formatCurrency(stats.pendingAmt, currency)} sub={`${stats.pending.length} awaiting`} icon={Clock} accent="bg-amber-500" />
         <StatCard testid="stat-clients" label="Active clients" value={clients.length} sub={`${briefs.length} briefs sent`} icon={Users} accent="bg-violet-600" />
         <StatCard testid="stat-overdue" label="Overdue" value={stats.overdue.length} sub={stats.overdue.length ? "Needs follow-up" : "All clear 🎉"} icon={AlertCircle} accent="bg-rose-600" />
       </div>
