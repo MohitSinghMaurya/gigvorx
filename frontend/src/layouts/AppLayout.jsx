@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Brand } from "@/components/Brand";
 import {
   LayoutDashboard, Users, FileText, Receipt, BarChart3, Settings,
-  Sparkles, LogOut, Menu, X, Shield, ChevronDown, Zap, Crown, User, ChevronRight, Target,
+  Sparkles, LogOut, Menu, X, Shield, ChevronDown, Zap, Crown, User, ChevronRight, Target, AlertTriangle,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -85,6 +85,8 @@ export default function AppLayout({ children }) {
   const initials = (user?.name || "U").split(" ").map(s => s[0]).join("").slice(0, 2).toUpperCase();
   const isTrial = user?.plan === "trial";
   const isAdmin = user?.role === "admin";
+  const isExpired = isTrial && trialDays === 0;
+  const isLastDay = isTrial && trialDays === 1;
 
   const Sidebar = ({ onItemClick }) => (
     <div className="flex flex-col h-full bg-background">
@@ -105,16 +107,34 @@ export default function AppLayout({ children }) {
         )}
       </div>
       {isTrial && (
-        <div className="m-3 p-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white relative overflow-hidden" data-testid="trial-card">
+        <div className={`m-3 p-4 rounded-xl relative overflow-hidden ${isExpired ? "bg-gradient-to-br from-rose-900 to-rose-800" : isLastDay ? "bg-gradient-to-br from-amber-900 to-amber-800" : "bg-gradient-to-br from-slate-900 to-slate-800"} text-white`} data-testid="trial-card">
           <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-blue-500/30 blur-xl" />
-          <Sparkles className="w-5 h-5 mb-2 text-sky-300" />
-          <p className="font-semibold text-sm">{trialDays} {trialDays === 1 ? "day" : "days"} left in trial</p>
-          <p className="text-xs text-white/70 mt-0.5">Upgrade to keep your workflow.</p>
+          {isExpired ? (
+            <AlertTriangle className="w-5 h-5 mb-2 text-rose-300" />
+          ) : isLastDay ? (
+            <AlertTriangle className="w-5 h-5 mb-2 text-amber-300" />
+          ) : (
+            <Sparkles className="w-5 h-5 mb-2 text-sky-300" />
+          )}
+          <p className="font-semibold text-sm">
+            {isExpired
+              ? "Trial expired!"
+              : isLastDay
+              ? "Last day of trial!"
+              : `${trialDays} ${trialDays === 1 ? "day" : "days"} left in trial`}
+          </p>
+          <p className="text-xs text-white/70 mt-0.5">
+            {isExpired
+              ? "Upgrade now to continue using GigVorx."
+              : isLastDay
+              ? "Tomorrow your trial ends. Upgrade today!"
+              : "Upgrade to keep your workflow."}
+          </p>
           <Button
             data-testid="sidebar-upgrade-btn"
             onClick={() => { onItemClick?.(); navigate("/pricing-app"); }}
             size="sm"
-            className="mt-3 w-full bg-white text-slate-900 hover:bg-white/90"
+            className={`mt-3 w-full ${isExpired ? "bg-rose-400 text-white hover:bg-rose-300" : "bg-white text-slate-900 hover:bg-white/90"}`}
           >
             Upgrade Now
           </Button>
@@ -125,18 +145,54 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-muted/30">
+
+      {/* Trial expired full banner */}
+      {isExpired && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-rose-600 text-white px-4 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Your free trial has expired. Upgrade now to continue using GigVorx.
+          </div>
+          <Button
+            size="sm"
+            onClick={() => navigate("/pricing-app")}
+            className="bg-white text-rose-600 hover:bg-white/90 shrink-0 font-semibold"
+          >
+            Upgrade Now
+          </Button>
+        </div>
+      )}
+
+      {/* Last day warning banner */}
+      {isLastDay && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white px-4 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Tomorrow is the last day of your free trial! Upgrade today to avoid interruption.
+          </div>
+          <Button
+            size="sm"
+            onClick={() => navigate("/pricing-app")}
+            className="bg-white text-amber-600 hover:bg-white/90 shrink-0 font-semibold"
+          >
+            Upgrade Now
+          </Button>
+        </div>
+      )}
+
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setMobileOpen(false)} />
       )}
       <aside className={cn(
         "fixed md:relative inset-y-0 left-0 z-50 w-64 border-r transform transition-transform md:translate-x-0",
-        mobileOpen ? "translate-x-0" : "-translate-x-full"
+        mobileOpen ? "translate-x-0" : "-translate-x-full",
+        (isExpired || isLastDay) ? "mt-10 md:mt-0" : ""
       )}>
         <Sidebar onItemClick={() => setMobileOpen(false)} />
       </aside>
 
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className={`flex-1 flex flex-col overflow-hidden min-w-0 ${(isExpired || isLastDay) ? "pt-10" : ""}`}>
         {/* Top header */}
         <header className="h-16 border-b bg-background/80 backdrop-blur-sm flex items-center justify-between px-4 md:px-6 gap-4 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -156,9 +212,10 @@ export default function AppLayout({ children }) {
               <Badge
                 data-testid="trial-status-badge"
                 variant="outline"
-                className="hidden sm:inline-flex border-amber-300 bg-amber-50 text-amber-700 font-medium"
+                className={`hidden sm:inline-flex font-medium ${isExpired ? "border-rose-300 bg-rose-50 text-rose-700" : isLastDay ? "border-amber-300 bg-amber-50 text-amber-700" : "border-amber-300 bg-amber-50 text-amber-700"}`}
               >
-                <Sparkles className="w-3 h-3 mr-1" />{trialDays}d trial left
+                <Sparkles className="w-3 h-3 mr-1" />
+                {isExpired ? "Trial expired" : `${trialDays}d trial left`}
               </Badge>
             )}
             <Button
