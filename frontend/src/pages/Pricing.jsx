@@ -6,12 +6,23 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function Pricing({ inApp = false }) {
   const { user, upgradePlan } = useAuth();
   const navigate = useNavigate();
   const [currency, setCurrency] = useState("INR");
+
+useEffect(() => {
+  fetch("https://ipapi.co/json/")
+    .then(res => res.json())
+    .then(data => {
+      if (data.country_code !== "IN") {
+        setCurrency("USD");
+      }
+    })
+    .catch(() => {});
+}, []);
 
   const handleSelect = (planId) => {
     if (!user) {
