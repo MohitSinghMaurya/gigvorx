@@ -21,6 +21,9 @@ import Analytics from "@/pages/Analytics";
 import Admin from "@/pages/Admin";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
+import About from "@/pages/About";
+import Privacy from "@/pages/Privacy";
+import Terms from "@/pages/Terms";
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuth();
@@ -67,6 +70,9 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="/pricing-app" element={<ProtectedRoute><Pricing inApp /></ProtectedRoute>} />
 
+      <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
+      <Route path="/privacy" element={<PublicLayout><Privacy /></PublicLayout>} />
+      <Route path="/terms" element={<PublicLayout><Terms /></PublicLayout>} />
       <Route path="*" element={<PublicLayout><NotFound /></PublicLayout>} />
     </Routes>
   );
