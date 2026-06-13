@@ -25,7 +25,7 @@ export default function PublicLayout({ children }) {
   } else {
     navigate("/?scroll=reviews");
   }
-};
+
   };
 
   return (
