@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCollection } from "@/lib/useCollection";
 import { findNiche, NICHES } from "@/lib/niches";
 import { whatsappShare, formatDate } from "@/lib/format";
@@ -10,10 +11,11 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Save, Eye, Download, MessageCircle, Plus, Trash2, GripVertical, CheckCircle2
+  ArrowLeft, Save, Eye, Download, MessageCircle, Plus, Trash2,
+  GripVertical, CheckCircle2, BookMarked, FolderOpen, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -28,10 +30,27 @@ const SECTIONS_TEMPLATE = (niche) => ({
   notes: `# Notes\n\nAnything else that matters for this engagement.`,
 });
 
+// ─── Question Template Helpers ───────────────────────────────────────────────
+function getTemplatesKey(userId) {
+  return `gv_question_templates_${userId}`;
+}
+
+function loadTemplates(userId) {
+  try {
+    const raw = localStorage.getItem(getTemplatesKey(userId));
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveTemplates(userId, templates) {
+  localStorage.setItem(getTemplatesKey(userId), JSON.stringify(templates));
+}
+
 export default function BriefEditor() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { items: clients } = useCollection("clients");
   const briefs = useCollection("briefs");
   const editing = !!id;
@@ -47,12 +66,19 @@ export default function BriefEditor() {
       clientId: "",
       niche: initialNiche.slug,
       status: "draft",
-      questions: initialNiche.questions.map(q => ({ id: Math.random().toString(36).slice(2), q, a: "" })),
+      questions: initialNiche.questions.map(q => ({
+        id: Math.random().toString(36).slice(2), q, a: ""
+      })),
       sections: SECTIONS_TEMPLATE(initialNiche),
       confirmation: false,
     };
   });
+
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templates, setTemplates] = useState(() => loadTemplates(user?.id));
   const previewRef = useRef(null);
 
   useEffect(() => {
@@ -60,7 +86,9 @@ export default function BriefEditor() {
       const b = briefs.get(id);
       if (b) {
         setForm({
-          questions: [], sections: SECTIONS_TEMPLATE(findNiche(b.niche)), confirmation: false,
+          questions: [],
+          sections: SECTIONS_TEMPLATE(findNiche(b.niche)),
+          confirmation: false,
           ...b,
         });
       }
@@ -68,15 +96,72 @@ export default function BriefEditor() {
     // eslint-disable-next-line
   }, [id, briefs.items.length]);
 
+  // Reload templates when user changes
+  useEffect(() => {
+    setTemplates(loadTemplates(user?.id));
+  }, [user?.id]);
+
   if (!form) return <div className="p-8 text-muted-foreground">Loading…</div>;
 
   const niche = findNiche(form.niche);
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setSection = (k, v) => setForm(f => ({ ...f, sections: { ...f.sections, [k]: v } }));
-
   const updateQuestion = (qid, patch) => setForm(f => ({ ...f, questions: f.questions.map(q => q.id === qid ? { ...q, ...patch } : q) }));
   const removeQuestion = (qid) => setForm(f => ({ ...f, questions: f.questions.filter(q => q.id !== qid) }));
   const addQuestion = () => setForm(f => ({ ...f, questions: [...f.questions, { id: Math.random().toString(36).slice(2), q: "", a: "", custom: true }] }));
+
+  // ─── Save current questions as template ───
+  const handleSaveTemplate = () => {
+    if (!templateName.trim()) { toast.error("Please enter a template name"); return; }
+    if (form.questions.length === 0) { toast.error("No questions to save"); return; }
+
+    const newTemplate = {
+      id: Math.random().toString(36).slice(2),
+      name: templateName.trim(),
+      questions: form.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "" })),
+      createdAt: new Date().toISOString(),
+      count: form.questions.length,
+    };
+
+    const updated = [...templates, newTemplate];
+    setTemplates(updated);
+    saveTemplates(user?.id, updated);
+    setTemplateName("");
+    setSaveTemplateOpen(false);
+    toast.success(`"${newTemplate.name}" saved! You can load it anytime.`);
+  };
+
+  // ─── Load template into current brief ───
+  const handleLoadTemplate = (template) => {
+    const loaded = template.questions.map(q => ({
+      id: Math.random().toString(36).slice(2),
+      q: q.q,
+      a: "",
+    }));
+    setForm(f => ({ ...f, questions: [...f.questions, ...loaded] }));
+    setLoadTemplateOpen(false);
+    toast.success(`Loaded ${loaded.length} questions from "${template.name}"`);
+  };
+
+  // ─── Replace questions with template ───
+  const handleReplaceWithTemplate = (template) => {
+    const loaded = template.questions.map(q => ({
+      id: Math.random().toString(36).slice(2),
+      q: q.q,
+      a: "",
+    }));
+    setForm(f => ({ ...f, questions: loaded }));
+    setLoadTemplateOpen(false);
+    toast.success(`Replaced with ${loaded.length} questions from "${template.name}"`);
+  };
+
+  // ─── Delete template ───
+  const handleDeleteTemplate = (templateId) => {
+    const updated = templates.filter(t => t.id !== templateId);
+    setTemplates(updated);
+    saveTemplates(user?.id, updated);
+    toast.success("Template deleted");
+  };
 
   const save = () => {
     if (editing) { briefs.update(id, form); toast.success("Brief saved"); }
@@ -117,17 +202,26 @@ export default function BriefEditor() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/briefs")} className="-ml-2" data-testid="back-briefs"><ArrowLeft className="w-4 h-4 mr-1" />Back</Button>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/briefs")} className="-ml-2" data-testid="back-briefs">
+          <ArrowLeft className="w-4 h-4 mr-1" />Back
+        </Button>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)} data-testid="brief-preview"><Eye className="w-4 h-4 mr-1.5" />Preview</Button>
-          <Button variant="outline" size="sm" onClick={downloadPDF} data-testid="brief-pdf"><Download className="w-4 h-4 mr-1.5" />Download PDF</Button>
-          <Button variant="outline" size="sm" onClick={shareWhatsApp} data-testid="brief-whatsapp"><MessageCircle className="w-4 h-4 mr-1.5" />Share on WhatsApp</Button>
-          <Button size="sm" onClick={save} data-testid="brief-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20"><Save className="w-4 h-4 mr-1.5" />Save</Button>
+          <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)} data-testid="brief-preview">
+            <Eye className="w-4 h-4 mr-1.5" />Preview
+          </Button>
+          <Button variant="outline" size="sm" onClick={downloadPDF} data-testid="brief-pdf">
+            <Download className="w-4 h-4 mr-1.5" />Download PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={shareWhatsApp} data-testid="brief-whatsapp">
+            <MessageCircle className="w-4 h-4 mr-1.5" />Share on WhatsApp
+          </Button>
+          <Button size="sm" onClick={save} data-testid="brief-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20">
+            <Save className="w-4 h-4 mr-1.5" />Save
+          </Button>
         </div>
       </div>
 
       <Card className="overflow-hidden">
-        {/* Header strip */}
         <div className={`h-2 bg-gradient-to-r ${niche.accent}`} />
         <div className="p-6 md:p-10">
           <Badge variant="outline" className="mb-3">{niche.name}</Badge>
@@ -182,12 +276,49 @@ export default function BriefEditor() {
               </section>
             ))}
 
-            {/* Q&A */}
+            {/* Q&A Section */}
             <section>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground">Questions &amp; Answers</p>
-                <Button size="sm" variant="ghost" onClick={addQuestion} data-testid="brief-add-question"><Plus className="w-3.5 h-3.5 mr-1" />Add question</Button>
+                <div className="flex gap-2 flex-wrap">
+                  {/* Load template button */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setLoadTemplateOpen(true)}
+                    className="h-7 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 mr-1" />
+                    Load saved questions
+                    {templates.length > 0 && (
+                      <span className="ml-1.5 bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold">
+                        {templates.length}
+                      </span>
+                    )}
+                  </Button>
+                  {/* Save template button */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSaveTemplateOpen(true)}
+                    className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <BookMarked className="w-3.5 h-3.5 mr-1" />
+                    Save as template
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={addQuestion} data-testid="brief-add-question" className="h-7 text-xs">
+                    <Plus className="w-3.5 h-3.5 mr-1" />Add question
+                  </Button>
+                </div>
               </div>
+
+              {form.questions.length === 0 && (
+                <div className="text-center py-8 border border-dashed rounded-lg text-muted-foreground text-sm">
+                  <p>No questions yet.</p>
+                  <p className="mt-1">Add a question or load a saved template.</p>
+                </div>
+              )}
+
               <div className="space-y-4">
                 {form.questions.map((q, i) => (
                   <div key={q.id} className="p-4 rounded-lg border bg-muted/20 group">
@@ -210,7 +341,11 @@ export default function BriefEditor() {
                           className="border-0 bg-transparent px-0 focus-visible:ring-0 text-muted-foreground"
                         />
                       </div>
-                      <button onClick={() => removeQuestion(q.id)} data-testid={`brief-remove-q-${i}`} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
+                      <button
+                        onClick={() => removeQuestion(q.id)}
+                        data-testid={`brief-remove-q-${i}`}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -221,7 +356,13 @@ export default function BriefEditor() {
 
             <section>
               <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground mb-2">Notes</p>
-              <Textarea data-testid="brief-section-notes" value={form.sections.notes} onChange={(e) => setSection("notes", e.target.value)} rows={3} className="border-0 bg-transparent px-0 focus-visible:ring-0" />
+              <Textarea
+                data-testid="brief-section-notes"
+                value={form.sections.notes}
+                onChange={(e) => setSection("notes", e.target.value)}
+                rows={3}
+                className="border-0 bg-transparent px-0 focus-visible:ring-0"
+              />
             </section>
 
             <section className="pt-6 border-t">
@@ -234,7 +375,9 @@ export default function BriefEditor() {
                   className="w-5 h-5 rounded border-2 accent-foreground"
                 />
                 <div>
-                  <p className="font-semibold flex items-center gap-2">Confirmation {form.confirmation && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}</p>
+                  <p className="font-semibold flex items-center gap-2">
+                    Confirmation {form.confirmation && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                  </p>
                   <p className="text-sm text-muted-foreground">Mark this brief as approved by the client.</p>
                 </div>
               </label>
@@ -243,18 +386,139 @@ export default function BriefEditor() {
         </div>
       </Card>
 
+      {/* Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{form.title}</DialogTitle></DialogHeader>
           <div ref={previewRef} className="brief-prose">
             <p className="text-sm text-muted-foreground">Client: <b>{form.clientName || "—"}</b> · Niche: <b>{niche.name}</b></p>
-            {Object.entries({ "Project Overview": form.sections.overview, "Client Details": form.sections.clientDetails, "Requirements": form.sections.requirements, "Timeline": form.sections.timeline, "Budget": form.sections.budget, "Deliverables": form.sections.deliverables }).map(([k, v]) => (
+            {Object.entries({
+              "Project Overview": form.sections.overview,
+              "Client Details": form.sections.clientDetails,
+              "Requirements": form.sections.requirements,
+              "Timeline": form.sections.timeline,
+              "Budget": form.sections.budget,
+              "Deliverables": form.sections.deliverables,
+            }).map(([k, v]) => (
               <div key={k}><h3>{k}</h3><p className="whitespace-pre-wrap text-sm">{v?.replace(/^#.*\n/m, "")}</p></div>
             ))}
             <h3>Questions & Answers</h3>
             <ol>{form.questions.map(q => <li key={q.id}><b>{q.q}</b><br /><span className="text-muted-foreground">{q.a || "—"}</span></li>)}</ol>
-            <h3>Notes</h3><p className="whitespace-pre-wrap text-sm">{form.sections.notes?.replace(/^#.*\n/m, "")}</p>
+            <h3>Notes</h3>
+            <p className="whitespace-pre-wrap text-sm">{form.sections.notes?.replace(/^#.*\n/m, "")}</p>
             <p className="mt-6 font-semibold">{form.confirmation ? "✅ Approved by client" : "⏳ Pending approval"}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Template Dialog */}
+      <Dialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookMarked className="w-5 h-5 text-emerald-600" />
+              Save questions as template
+            </DialogTitle>
+            <DialogDescription>
+              Save your {form.questions.length} questions so you can reuse them in future briefs.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label>Template name</Label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder='e.g. "My Web Design Questions"'
+                className="mt-1.5"
+                onKeyDown={(e) => e.key === "Enter" && handleSaveTemplate()}
+                autoFocus
+              />
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Questions to save ({form.questions.length}):</p>
+              <ul className="space-y-1 max-h-32 overflow-y-auto">
+                {form.questions.map((q, i) => (
+                  <li key={q.id} className="truncate">
+                    {i + 1}. {q.q || "Empty question"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSaveTemplate} className="bg-brand-gradient text-white flex-1">
+                <BookMarked className="w-4 h-4 mr-1.5" />Save template
+              </Button>
+              <Button variant="outline" onClick={() => setSaveTemplateOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Load Template Dialog */}
+      <Dialog open={loadTemplateOpen} onOpenChange={setLoadTemplateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-blue-600" />
+              Load saved questions
+            </DialogTitle>
+            <DialogDescription>
+              Choose a template to load into this brief.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            {templates.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <BookMarked className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="font-medium">No saved templates yet</p>
+                <p className="text-sm mt-1">Add questions to a brief and click "Save as template"</p>
+              </div>
+            ) : (
+              templates.map(t => (
+                <div key={t.id} className="border rounded-lg p-4 flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm">{t.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t.count} questions · Saved {formatDate(t.createdAt)}
+                    </p>
+                    <ul className="mt-2 space-y-0.5 max-h-20 overflow-y-auto">
+                      {t.questions.slice(0, 3).map((q, i) => (
+                        <li key={i} className="text-xs text-muted-foreground truncate">
+                          {i + 1}. {q.q}
+                        </li>
+                      ))}
+                      {t.questions.length > 3 && (
+                        <li className="text-xs text-muted-foreground">+{t.questions.length - 3} more...</li>
+                      )}
+                    </ul>
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <Button
+                      size="sm"
+                      onClick={() => handleLoadTemplate(t)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white h-7 text-xs"
+                    >
+                      Add to brief
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleReplaceWithTemplate(t)}
+                      className="h-7 text-xs"
+                    >
+                      Replace all
+                    </Button>
+                    <button
+                      onClick={() => handleDeleteTemplate(t.id)}
+                      className="text-[10px] text-muted-foreground hover:text-destructive text-center"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>
