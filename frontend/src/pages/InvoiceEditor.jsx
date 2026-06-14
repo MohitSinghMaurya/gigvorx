@@ -13,17 +13,26 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Save, Eye, Download, MessageCircle, Plus, Trash2, CheckCircle2, Receipt, Image as ImageIcon, QrCode, PartyPopper,
+  ArrowLeft, Save, Eye, Download, MessageCircle, Plus, Trash2,
+  CheckCircle2, Image as ImageIcon, QrCode, PartyPopper,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 const TEMPLATES = [
-  { id: "classic", name: "Classic", desc: "Clean & timeless", accent: "border-foreground" },
-  { id: "modern", name: "Modern", desc: "Bold gradient header", accent: "border-violet-500" },
-  { id: "minimal", name: "Minimal", desc: "Pure typography", accent: "border-muted-foreground" },
+  { id: "classic", name: "Classic", desc: "Clean & timeless", plan: "starter" },
+  { id: "modern", name: "Modern", desc: "Bold gradient header", plan: "starter" },
+  { id: "minimal", name: "Minimal", desc: "Pure typography", plan: "pro" },
+  { id: "corporate", name: "Corporate", desc: "Blue corporate style", plan: "pro" },
+  { id: "teal", name: "Teal Pro", desc: "Teal geometric style", plan: "pro" },
+  { id: "orange", name: "Orange Bold", desc: "Dark navy & orange", plan: "pro" },
 ];
+
+const PLAN_RANK = { trial: 1, starter: 1, pro: 2, premium: 3, agency: 4 };
+function canUsePlan(userPlan, requiredPlan) {
+  return (PLAN_RANK[userPlan] || 1) >= (PLAN_RANK[requiredPlan] || 1);
+}
 
 const STATUS_STYLES = {
   paid: "bg-emerald-600 text-white border-emerald-600",
@@ -32,7 +41,9 @@ const STATUS_STYLES = {
   draft: "bg-muted text-muted-foreground border-border",
 };
 
-function emptyItem() { return { id: Math.random().toString(36).slice(2), description: "", quantity: 1, rate: 0 }; }
+function emptyItem() {
+  return { id: Math.random().toString(36).slice(2), description: "", quantity: 1, rate: 0 };
+}
 
 export default function InvoiceEditor() {
   const { id } = useParams();
@@ -52,10 +63,17 @@ export default function InvoiceEditor() {
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
     items: [emptyItem()],
-    taxRate: 18, discount: 0, notes: "Thank you for your business!",
+    taxRate: 18, discount: 0,
+    notes: "Thank you for your business!",
     terms: "Payment due within 14 days. Late payments incur 1.5% monthly interest.",
     logo: "", upiId: "", qrImage: "",
-    business: readSetting(user?.id, "business", { name: user?.name || "Your business", email: user?.email || "", phone: "", address: "" }),
+    paymentType: "upi",
+    bankName: "", bankAccount: "", bankIfsc: "",
+    business: readSetting(user?.id, "business", {
+      name: user?.name || "Your business",
+      email: user?.email || "",
+      phone: "", address: "",
+    }),
   }));
 
   const [preview, setPreview] = useState(false);
@@ -65,7 +83,13 @@ export default function InvoiceEditor() {
   useEffect(() => {
     if (editing) {
       const inv = invoices.get(id);
-      if (inv) setForm({ items: [emptyItem()], business: readSetting(user?.id, "business", { name: user?.name }), ...inv });
+      if (inv) setForm({
+        items: [emptyItem()],
+        business: readSetting(user?.id, "business", { name: user?.name }),
+        paymentType: "upi",
+        bankName: "", bankAccount: "", bankIfsc: "",
+        ...inv,
+      });
     }
     // eslint-disable-next-line
   }, [id, invoices.items.length]);
@@ -122,7 +146,38 @@ export default function InvoiceEditor() {
   };
 
   const shareWA = () => {
-    const msg = `📄 Invoice ${form.invoiceNumber}\n${form.business.name} → ${form.clientName}\nAmount: ${formatCurrency(totals.total, currency)}\nDue: ${formatDate(form.dueDate)}\n${form.upiId ? `\nPay via UPI: ${form.upiId}` : ""}\n\nFull invoice attached.`;
+    const itemsList = form.items
+      .filter(it => it.description)
+      .map(it => `  • ${it.description} × ${it.quantity} — ${formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0), currency)}`)
+      .join("\n");
+
+    const paymentInfo = () => {
+      if (form.paymentType === "none") return "";
+      if (!form.paymentType || form.paymentType === "upi") return form.upiId ? `💳 Pay via UPI: ${form.upiId}` : "";
+      if (form.paymentType === "paypal") return form.upiId ? `💳 Pay via PayPal: ${form.upiId}` : "";
+      if (form.paymentType === "stripe") return form.upiId ? `💳 Pay via Stripe: ${form.upiId}` : "";
+      if (form.paymentType === "bank") return form.bankAccount ? `🏦 Bank Transfer:\n  Account: ${form.bankName}\n  Number: ${form.bankAccount}\n  Bank: ${form.bankIfsc}` : "";
+      if (form.paymentType === "custom") return form.upiId ? `💳 Payment Link: ${form.upiId}` : "";
+      return "";
+    };
+
+    const msg = `📄 *INVOICE ${form.invoiceNumber}*
+━━━━━━━━━━━━━━━━━━━━
+*From:* ${form.business?.name}
+*To:* ${form.clientName || "—"}
+━━━━━━━━━━━━━━━━━━━━
+*Items:*
+${itemsList || "  • No items added"}
+━━━━━━━━━━━━━━━━━━━━
+Subtotal: ${formatCurrency(totals.subtotal, currency)}
+${totals.discountAmt > 0 ? `Discount: −${formatCurrency(totals.discountAmt, currency)}\n` : ""}Tax (${form.taxRate}%): ${formatCurrency(totals.taxAmt, currency)}
+*Total: ${formatCurrency(totals.total, currency)}*
+━━━━━━━━━━━━━━━━━━━━
+${paymentInfo()}
+📅 Due: ${formatDate(form.dueDate)}
+━━━━━━━━━━━━━━━━━━━━
+_Sent via GigVorx_`;
+
     whatsappShare(msg);
   };
 
@@ -131,37 +186,67 @@ export default function InvoiceEditor() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/invoices")} className="-ml-2" data-testid="back-invoices"><ArrowLeft className="w-4 h-4 mr-1" />Back</Button>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/invoices")} className="-ml-2" data-testid="back-invoices">
+          <ArrowLeft className="w-4 h-4 mr-1" />Back
+        </Button>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPreview(true)} data-testid="inv-preview"><Eye className="w-4 h-4 mr-1.5" />Preview</Button>
-          <Button variant="outline" size="sm" onClick={downloadPDF} data-testid="inv-pdf"><Download className="w-4 h-4 mr-1.5" />Download PDF</Button>
-          <Button variant="outline" size="sm" onClick={shareWA} data-testid="inv-whatsapp"><MessageCircle className="w-4 h-4 mr-1.5" />Share on WhatsApp</Button>
+          <Button variant="outline" size="sm" onClick={() => setPreview(true)} data-testid="inv-preview">
+            <Eye className="w-4 h-4 mr-1.5" />Preview
+          </Button>
+          <Button variant="outline" size="sm" onClick={downloadPDF} data-testid="inv-pdf">
+            <Download className="w-4 h-4 mr-1.5" />Download PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={shareWA} data-testid="inv-whatsapp">
+            <MessageCircle className="w-4 h-4 mr-1.5" />Share on WhatsApp
+          </Button>
           {form.status !== "paid" && (
-            <Button variant="outline" size="sm" onClick={markPaid} data-testid="inv-mark-paid" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"><CheckCircle2 className="w-4 h-4 mr-1.5" />Mark as paid</Button>
+            <Button variant="outline" size="sm" onClick={markPaid} data-testid="inv-mark-paid" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+              <CheckCircle2 className="w-4 h-4 mr-1.5" />Mark as paid
+            </Button>
           )}
-          <Button size="sm" onClick={save} data-testid="inv-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20"><Save className="w-4 h-4 mr-1.5" />Save</Button>
+          <Button size="sm" onClick={save} data-testid="inv-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20">
+            <Save className="w-4 h-4 mr-1.5" />Save
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
+
+          {/* Template Selector */}
           <Card className="p-5">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-3 block">Template</Label>
             <div className="grid grid-cols-3 gap-2">
-              {TEMPLATES.map(t => (
-                <button
-                  key={t.id}
-                  data-testid={`tmpl-${t.id}`}
-                  onClick={() => setField("template", t.id)}
-                  className={`p-3 rounded-lg border-2 text-left transition-all ${form.template === t.id ? "border-foreground shadow-sm" : "border-border hover:border-foreground/30"}`}
-                >
-                  <p className="font-semibold text-sm">{t.name}</p>
-                  <p className="text-xs text-muted-foreground">{t.desc}</p>
-                </button>
-              ))}
+              {TEMPLATES.map(t => {
+                const locked = !canUsePlan(user?.plan, t.plan);
+                return (
+                  <button
+                    key={t.id}
+                    data-testid={`tmpl-${t.id}`}
+                    onClick={() => {
+                      if (locked) { toast.error("Upgrade to Pro to unlock this template"); return; }
+                      setField("template", t.id);
+                    }}
+                    className={`p-3 rounded-lg border-2 text-left transition-all relative ${
+                      form.template === t.id
+                        ? "border-foreground shadow-sm"
+                        : locked
+                        ? "border-border opacity-50 cursor-not-allowed"
+                        : "border-border hover:border-foreground/30"
+                    }`}
+                  >
+                    {locked && (
+                      <span className="absolute top-1.5 right-1.5 text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">PRO</span>
+                    )}
+                    <p className="font-semibold text-sm">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.desc}</p>
+                  </button>
+                );
+              })}
             </div>
           </Card>
 
+          {/* Invoice Details */}
           <Card className="p-5 space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
@@ -188,6 +273,7 @@ export default function InvoiceEditor() {
             </div>
           </Card>
 
+          {/* Client */}
           <Card className="p-5 space-y-4">
             <h3 className="font-semibold">Client</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -198,10 +284,13 @@ export default function InvoiceEditor() {
             </div>
           </Card>
 
+          {/* Line Items */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Line items</h3>
-              <Button size="sm" variant="outline" onClick={addItem} data-testid="inv-add-item"><Plus className="w-3.5 h-3.5 mr-1" />Add item</Button>
+              <Button size="sm" variant="outline" onClick={addItem} data-testid="inv-add-item">
+                <Plus className="w-3.5 h-3.5 mr-1" />Add item
+              </Button>
             </div>
             <div className="space-y-2">
               {form.items.map((it, i) => (
@@ -215,21 +304,11 @@ export default function InvoiceEditor() {
                   <div className="grid grid-cols-1 gap-2">
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider">Qty</p>
-                      <Input
-                        data-testid={`item-qty-${i}`}
-                        type="number"
-                        value={it.quantity}
-                        onChange={(e) => setItem(it.id, { quantity: e.target.value })}
-                      />
+                      <Input data-testid={`item-qty-${i}`} type="number" value={it.quantity} onChange={(e) => setItem(it.id, { quantity: e.target.value })} />
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider">Rate</p>
-                      <Input
-                        data-testid={`item-rate-${i}`}
-                        type="number"
-                        value={it.rate}
-                        onChange={(e) => setItem(it.id, { rate: e.target.value })}
-                      />
+                      <Input data-testid={`item-rate-${i}`} type="number" value={it.rate} onChange={(e) => setItem(it.id, { rate: e.target.value })} />
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider">Amount</p>
@@ -252,6 +331,7 @@ export default function InvoiceEditor() {
             </div>
           </Card>
 
+          {/* Tax & Discount */}
           <Card className="p-5 grid grid-cols-2 gap-3">
             <div>
               <Label>Tax / GST (%)</Label>
@@ -263,32 +343,90 @@ export default function InvoiceEditor() {
             </div>
           </Card>
 
+          {/* Payment & Branding */}
           <Card className="p-5 space-y-4">
             <h3 className="font-semibold">Payment & branding</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label>{currency === "INR" ? "UPI ID / Payment ID" : "PayPal / Stripe Link"}</Label>
-                <Input data-testid="inv-upi" placeholder={currency === "INR" ? "yourname@upi" : "https://paypal.me/yourname"} value={form.upiId} onChange={(e) => setField("upiId", e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label>Logo</Label>
-                <label className="mt-1 flex items-center gap-2 h-9 px-3 rounded-md border bg-background cursor-pointer hover:border-foreground/40 text-sm">
-                  <ImageIcon className="w-4 h-4" />
-                  {form.logo ? "Replace logo" : "Upload logo"}
-                  <input data-testid="inv-logo" type="file" accept="image/*" className="hidden" onChange={(e) => handleImage(e.target.files?.[0], "logo")} />
-                </label>
-              </div>
-              {currency === "INR" && (
-                <div className="md:col-span-2">
-                  <Label>UPI QR image</Label>
+
+            <div>
+              <Label>Payment Method</Label>
+              <select
+                value={form.paymentType || "upi"}
+                onChange={(e) => setField("paymentType", e.target.value)}
+                className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="upi">UPI (India)</option>
+                <option value="paypal">PayPal</option>
+                <option value="stripe">Stripe</option>
+                <option value="bank">Bank Transfer</option>
+                <option value="custom">Custom Link</option>
+                <option value="none">No Payment Info</option>
+              </select>
+            </div>
+
+            {(!form.paymentType || form.paymentType === "upi") && (
+              <div className="space-y-3">
+                <div>
+                  <Label>UPI ID</Label>
+                  <Input data-testid="inv-upi" placeholder="yourname@upi" value={form.upiId || ""} onChange={(e) => setField("upiId", e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>UPI QR Image</Label>
                   <label className="mt-1 flex items-center gap-2 h-9 px-3 rounded-md border bg-background cursor-pointer hover:border-foreground/40 text-sm">
                     <QrCode className="w-4 h-4" />
                     {form.qrImage ? "Replace QR" : "Upload QR (optional)"}
                     <input data-testid="inv-qr" type="file" accept="image/*" className="hidden" onChange={(e) => handleImage(e.target.files?.[0], "qrImage")} />
                   </label>
                 </div>
-              )}
+              </div>
+            )}
+
+            {form.paymentType === "paypal" && (
+              <div>
+                <Label>PayPal Link</Label>
+                <Input placeholder="https://paypal.me/yourname" value={form.upiId || ""} onChange={(e) => setField("upiId", e.target.value)} className="mt-1" />
+              </div>
+            )}
+
+            {form.paymentType === "stripe" && (
+              <div>
+                <Label>Stripe Payment Link</Label>
+                <Input placeholder="https://buy.stripe.com/your-link" value={form.upiId || ""} onChange={(e) => setField("upiId", e.target.value)} className="mt-1" />
+              </div>
+            )}
+
+            {form.paymentType === "bank" && (
+              <div className="space-y-3">
+                <div>
+                  <Label>Account Name</Label>
+                  <Input placeholder="Your Name" value={form.bankName || ""} onChange={(e) => setField("bankName", e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Account Number</Label>
+                  <Input placeholder="1234567890" value={form.bankAccount || ""} onChange={(e) => setField("bankAccount", e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Bank Name / IFSC / SWIFT</Label>
+                  <Input placeholder="HDFC Bank / HDFC0001234" value={form.bankIfsc || ""} onChange={(e) => setField("bankIfsc", e.target.value)} className="mt-1" />
+                </div>
+              </div>
+            )}
+
+            {form.paymentType === "custom" && (
+              <div>
+                <Label>Custom Payment Link</Label>
+                <Input placeholder="https://yourpaymentlink.com" value={form.upiId || ""} onChange={(e) => setField("upiId", e.target.value)} className="mt-1" />
+              </div>
+            )}
+
+            <div>
+              <Label>Logo</Label>
+              <label className="mt-1 flex items-center gap-2 h-9 px-3 rounded-md border bg-background cursor-pointer hover:border-foreground/40 text-sm">
+                <ImageIcon className="w-4 h-4" />
+                {form.logo ? "Replace logo" : "Upload logo"}
+                <input data-testid="inv-logo" type="file" accept="image/*" className="hidden" onChange={(e) => handleImage(e.target.files?.[0], "logo")} />
+              </label>
             </div>
+
             <div>
               <Label>Notes</Label>
               <Textarea data-testid="inv-notes" value={form.notes} onChange={(e) => setField("notes", e.target.value)} rows={2} className="mt-1" />
@@ -300,6 +438,7 @@ export default function InvoiceEditor() {
           </Card>
         </div>
 
+        {/* Live Preview */}
         <div className="lg:sticky lg:top-24 h-fit">
           <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Live preview</p>
           <div className="rounded-xl border bg-white overflow-hidden shadow-sm">
@@ -337,8 +476,14 @@ export default function InvoiceEditor() {
   );
 }
 
+// ─── INVOICE TEMPLATE ROUTER ────────────────────────────────────────────────
 function InvoiceTemplate({ template, form, totals, currency = "INR", large = false }) {
+  if (template === "corporate") return <CorporateBlueTemplate form={form} totals={totals} currency={currency} large={large} />;
+  if (template === "teal") return <TealProTemplate form={form} totals={totals} currency={currency} large={large} />;
+  if (template === "orange") return <OrangeBoldTemplate form={form} totals={totals} currency={currency} large={large} />;
+
   const sz = large ? "text-sm" : "text-[11px]";
+
   if (template === "modern") {
     return (
       <div className={`${sz} text-gray-900`}>
@@ -393,6 +538,7 @@ function InvoiceTemplate({ template, form, totals, currency = "INR", large = fal
   );
 }
 
+// ─── BODY BLOCK (Classic/Modern/Minimal) ────────────────────────────────────
 function BodyBlock({ form, totals, currency = "INR", large }) {
   return (
     <>
@@ -437,13 +583,16 @@ function BodyBlock({ form, totals, currency = "INR", large }) {
           <div className="flex justify-between font-bold text-base pt-2 border-t mt-1"><span>Total</span><span className="tabular-nums">{formatCurrency(totals.total, currency)}</span></div>
         </div>
       </div>
-      {(form.upiId || form.qrImage) && (
+      {form.upiId && form.paymentType !== "none" && (
         <div className="p-3 rounded-md bg-gray-50 border mb-5 flex items-center gap-3">
-          {form.qrImage && currency === "INR" && <img src={form.qrImage} alt="QR" className="w-16 h-16 object-contain bg-white rounded border" />}
+          {form.qrImage && form.paymentType === "upi" && <img src={form.qrImage} alt="QR" className="w-16 h-16 object-contain bg-white rounded border" />}
           <div className="text-[10px]">
-            <p className="font-semibold uppercase tracking-wider text-gray-500">{currency === "INR" ? "Pay via UPI" : "Payment Link"}</p>
-            {form.upiId && <p className="font-mono mt-0.5">{form.upiId}</p>}
-            {form.qrImage && currency === "INR" && <p className="text-gray-500">Scan the QR with any UPI app</p>}
+            <p className="font-semibold uppercase tracking-wider text-gray-500">
+              {form.paymentType === "upi" ? "Pay via UPI" : form.paymentType === "paypal" ? "Pay via PayPal" : form.paymentType === "stripe" ? "Pay via Stripe" : form.paymentType === "bank" ? "Bank Transfer" : "Payment Link"}
+            </p>
+            <p className="font-mono mt-0.5">{form.upiId}</p>
+            {form.paymentType === "bank" && form.bankName && <p className="text-gray-500">Account: {form.bankName} | {form.bankAccount}</p>}
+            {form.paymentType === "upi" && form.qrImage && <p className="text-gray-500">Scan QR with any UPI app</p>}
           </div>
         </div>
       )}
@@ -455,5 +604,298 @@ function BodyBlock({ form, totals, currency = "INR", large }) {
         </div>
       )}
     </>
+  );
+}
+
+// ─── CORPORATE BLUE TEMPLATE ─────────────────────────────────────────────────
+function CorporateBlueTemplate({ form, totals, currency, large }) {
+  const sz = large ? "text-sm" : "text-[10px]";
+  return (
+    <div className={`${sz} text-gray-900 bg-white`}>
+      <div className="relative bg-[#1a3a6b] text-white px-6 py-3 flex items-center justify-between overflow-hidden">
+        <div className="space-y-0.5 z-10">
+          <div className="flex items-center gap-3 text-[9px] text-blue-200">
+            <span>📞 {form.business?.phone || "000 1234-56789"}</span>
+            <span>✉ {form.business?.email || "your@email.com"}</span>
+          </div>
+          <div className="text-[9px] text-blue-200">📍 {form.business?.address || "Your Address Here"}</div>
+        </div>
+        <div className="z-10 text-right">
+          {form.logo
+            ? <img src={form.logo} alt="" className="h-10 object-contain" />
+            : <div><p className="font-extrabold text-lg text-white">{form.business?.name || "BRAND"}</p><p className="text-[9px] text-blue-300">TAGLINE</p></div>
+          }
+        </div>
+        <div className="absolute right-20 -top-4 w-16 h-16 rounded-full border-4 border-blue-400/40" />
+        <div className="absolute right-12 -top-2 w-12 h-12 rounded-full bg-blue-500/30" />
+        <div className="absolute right-4 top-0 w-10 h-10 rounded-full bg-blue-600/40" />
+      </div>
+      <div className="flex justify-between px-6 py-4">
+        <div>
+          <p className="text-[8px] font-bold text-blue-600 uppercase tracking-wider mb-1">Invoice To:</p>
+          <p className="font-bold text-sm">{form.clientName || "Client Name"}</p>
+          <p className="text-gray-500">{form.clientEmail}</p>
+          <p className="text-gray-500 whitespace-pre-wrap">{form.clientAddress}</p>
+        </div>
+        <div className="text-right">
+          <p className="font-extrabold text-2xl text-gray-800">INVOICE</p>
+          <p className="text-gray-500 mt-1">Invoice No: <span className="font-semibold text-gray-800">{form.invoiceNumber}</span></p>
+          <p className="text-gray-500">Invoice Date: <span className="font-semibold text-gray-800">{formatDate(form.issueDate)}</span></p>
+          <p className="text-gray-500">Due Date: <span className="font-semibold text-gray-800">{formatDate(form.dueDate)}</span></p>
+        </div>
+      </div>
+      <div className="px-6">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-[#1a3a6b] text-white">
+              <th className="p-2 text-left text-[9px] uppercase tracking-wider">Sl.N.</th>
+              <th className="p-2 text-left text-[9px] uppercase tracking-wider">Item Description</th>
+              <th className="p-2 text-right text-[9px] uppercase tracking-wider">Price</th>
+              <th className="p-2 text-right text-[9px] uppercase tracking-wider">Qty</th>
+              <th className="p-2 text-right text-[9px] uppercase tracking-wider">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {form.items.map((it, i) => (
+              <tr key={it.id} className={i % 2 === 0 ? "bg-blue-50/50" : "bg-white"}>
+                <td className="p-2 text-center">{String(i + 1).padStart(2, "0")}</td>
+                <td className="p-2">{it.description || "—"}</td>
+                <td className="p-2 text-right tabular-nums">{formatCurrency(it.rate, currency)}</td>
+                <td className="p-2 text-right">{it.quantity}</td>
+                <td className="p-2 text-right font-semibold tabular-nums">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0), currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex justify-between px-6 mt-4 gap-4">
+        <div className="flex-1">
+          <p className="text-gray-600 italic mb-2">{form.notes}</p>
+          {form.upiId && form.paymentType !== "none" && (
+            <div>
+              <p className="text-[9px] font-bold text-blue-600 uppercase tracking-wider mb-1">Payment Method</p>
+              <p className="text-gray-600">{form.upiId}</p>
+              {form.bankName && <p className="text-gray-600">Account: {form.bankName}</p>}
+              {form.bankAccount && <p className="text-gray-600">No: {form.bankAccount}</p>}
+            </div>
+          )}
+        </div>
+        <div className="w-44 space-y-1">
+          <div className="flex justify-between text-gray-600"><span>SubTotal</span><span className="tabular-nums">{formatCurrency(totals.subtotal, currency)}</span></div>
+          {totals.discountAmt > 0 && <div className="flex justify-between text-emerald-600"><span>Discount</span><span>−{formatCurrency(totals.discountAmt, currency)}</span></div>}
+          <div className="flex justify-between text-gray-600"><span>Tax ({form.taxRate}%)</span><span className="tabular-nums">{formatCurrency(totals.taxAmt, currency)}</span></div>
+          <div className="flex justify-between font-bold border-t pt-1 mt-1"><span>Total Amount</span><span className="tabular-nums">{formatCurrency(totals.total, currency)}</span></div>
+        </div>
+      </div>
+      {form.terms && <div className="px-6 mt-3 text-[8px] text-gray-500 border-t pt-2"><span className="font-bold text-blue-600">Terms & Condition: </span>{form.terms}</div>}
+      <div className="mt-4 flex justify-between items-end px-6 pb-4">
+        <div />
+        <div className="text-right">
+          <p className="text-gray-400 italic text-[9px]">{form.business?.name}</p>
+          <p className="font-bold text-sm">{form.business?.name?.toUpperCase()}</p>
+          <p className="text-[9px] text-gray-500">General Manager</p>
+        </div>
+      </div>
+      <div className="h-2 bg-[#1a3a6b] mx-6 mb-1 rounded-sm" />
+    </div>
+  );
+}
+
+// ─── TEAL PROFESSIONAL TEMPLATE ──────────────────────────────────────────────
+function TealProTemplate({ form, totals, currency, large }) {
+  const sz = large ? "text-sm" : "text-[10px]";
+  return (
+    <div className={`${sz} text-gray-900 bg-white`}>
+      <div className="relative bg-[#1a1a2e] text-white px-6 py-4 flex justify-between items-start overflow-hidden">
+        <div className="z-10">
+          {form.logo
+            ? <img src={form.logo} alt="" className="h-10 object-contain mb-1" />
+            : <p className="font-extrabold text-lg text-white">{form.business?.name || "COMPANY"}</p>
+          }
+          <p className="text-[9px] text-gray-400">Company Tagline Here</p>
+        </div>
+        <div className="z-10 bg-[#00897b] px-5 py-3 text-right">
+          <p className="font-extrabold text-xl">INVOICE</p>
+          <p className="text-[9px] text-teal-100 mt-1">Invoice No: <span className="font-bold">{form.invoiceNumber}</span></p>
+          <p className="text-[9px] text-teal-100">Due Date: <span className="font-bold">{formatDate(form.dueDate)}</span></p>
+          <p className="text-[9px] text-teal-100">Invoice Date: <span className="font-bold">{formatDate(form.issueDate)}</span></p>
+        </div>
+        <div className="absolute top-0 left-32 w-20 h-full bg-[#00897b]/20 skew-x-12" />
+      </div>
+      <div className="flex justify-between px-6 py-4 gap-4">
+        <div>
+          <p className="text-[8px] font-bold text-[#00897b] uppercase tracking-wider mb-1">Invoice To:</p>
+          <p className="font-bold text-base">{form.clientName || "Client Name"}.</p>
+          <p className="text-[9px] text-gray-500">{form.clientEmail}</p>
+          <p className="text-[9px] text-gray-500">{form.clientAddress}</p>
+        </div>
+        {form.upiId && form.paymentType !== "none" && (
+          <div>
+            <p className="text-[8px] font-bold text-[#00897b] uppercase tracking-wider mb-1">Payment Method</p>
+            <p className="text-[9px] text-gray-600">{form.upiId}</p>
+            {form.bankName && <p className="text-[9px] text-gray-600">Account: {form.bankName}</p>}
+            {form.bankAccount && <p className="text-[9px] text-gray-600">No: {form.bankAccount}</p>}
+          </div>
+        )}
+      </div>
+      <div className="px-6">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-[#00897b] text-white">
+              <th className="p-2 text-left text-[9px] uppercase">No.</th>
+              <th className="p-2 text-left text-[9px] uppercase">Item Description</th>
+              <th className="p-2 text-right text-[9px] uppercase">Price</th>
+              <th className="p-2 text-right text-[9px] uppercase">Qty.</th>
+              <th className="p-2 text-right text-[9px] uppercase">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {form.items.map((it, i) => (
+              <tr key={it.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                <td className="p-2">{String(i + 1).padStart(2, "0")}</td>
+                <td className="p-2">{it.description || "—"}</td>
+                <td className="p-2 text-right tabular-nums">{formatCurrency(it.rate, currency)}</td>
+                <td className="p-2 text-right">{it.quantity}</td>
+                <td className="p-2 text-right font-semibold tabular-nums">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0), currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex justify-end px-6 mt-3">
+        <div className="w-48 space-y-1">
+          <div className="flex justify-between text-gray-600"><span>Subtotal:</span><span className="tabular-nums">{formatCurrency(totals.subtotal, currency)}</span></div>
+          {totals.discountAmt > 0 && <div className="flex justify-between text-emerald-600"><span>Discount:</span><span>−{formatCurrency(totals.discountAmt, currency)}</span></div>}
+          <div className="flex justify-between text-gray-600"><span>Tax ({form.taxRate}%):</span><span className="tabular-nums">{formatCurrency(totals.taxAmt, currency)}</span></div>
+          <div className="flex justify-between font-bold bg-[#00897b] text-white px-2 py-1 mt-1"><span>Total:</span><span className="tabular-nums">{formatCurrency(totals.total, currency)}</span></div>
+        </div>
+      </div>
+      {form.terms && (
+        <div className="px-6 mt-3">
+          <p className="text-[9px] font-bold text-[#00897b] uppercase tracking-wider">Terms & Conditions:</p>
+          <p className="text-[8px] text-gray-500 mt-0.5">{form.terms}</p>
+        </div>
+      )}
+      <div className="flex justify-between items-end px-6 mt-4 pb-2">
+        <p className="font-bold text-sm">THANK YOU FOR BUSINESS WITH US.</p>
+        <div className="text-right">
+          <p className="text-gray-400 italic text-[9px]">{form.business?.name}</p>
+          <p className="text-[9px] text-gray-500">Your Name & Signature</p>
+        </div>
+      </div>
+      <div className="bg-[#1a1a2e] text-white px-6 py-2 flex justify-between mt-2">
+        <span className="text-[9px] text-gray-400">{form.business?.phone}</span>
+        <span className="text-[9px] text-gray-400">{form.business?.email}</span>
+        <span className="text-[9px] text-gray-400">{form.business?.address}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── ORANGE BOLD TEMPLATE ────────────────────────────────────────────────────
+function OrangeBoldTemplate({ form, totals, currency, large }) {
+  const sz = large ? "text-sm" : "text-[10px]";
+  return (
+    <div className={`${sz} text-gray-900 bg-white`}>
+      <div className="relative bg-[#1a1a2e] px-6 py-3 flex justify-between items-center overflow-hidden">
+        <div className="z-10 flex items-center gap-3">
+          {form.logo
+            ? <img src={form.logo} alt="" className="h-10 object-contain" />
+            : (
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold text-sm">G</div>
+                <div>
+                  <p className="font-extrabold text-white text-sm">{form.business?.name || "COMPANY"}</p>
+                  <p className="text-[8px] text-gray-400">A MINT OF CREATIVITY</p>
+                </div>
+              </div>
+            )
+          }
+        </div>
+        <div className="z-10 text-right text-[9px] text-gray-400 space-y-0.5">
+          <p>📞 {form.business?.phone || "+000 0000 0000"}</p>
+          <p>✉ {form.business?.email || "your@email.com"}</p>
+          <p>🌐 {form.business?.address || "www.website.com"}</p>
+        </div>
+        <div className="absolute top-0 left-24 w-0 h-0 border-l-[20px] border-l-transparent border-t-[40px] border-t-orange-500" />
+        <div className="absolute top-0 right-32 w-0 h-0 border-r-[20px] border-r-transparent border-t-[40px] border-t-orange-500" />
+      </div>
+      <div className="flex justify-between px-6 py-4">
+        <div>
+          <p className="text-[9px] text-gray-500">Invoice to</p>
+          <p className="font-bold text-sm">{form.clientName || "Client Name"}</p>
+          <p className="text-[9px] text-gray-500 mt-0.5">E: {form.clientEmail || "client@email.com"}</p>
+          <p className="text-[9px] text-gray-500">A: {form.clientAddress || "Street, City, Zip"}</p>
+        </div>
+        <div className="text-center">
+          <p className="font-extrabold text-2xl text-gray-800">INVOICE</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[9px] text-gray-500">Invoice No: <span className="font-semibold">{form.invoiceNumber}</span></p>
+          <p className="text-[9px] text-gray-500">Date: <span className="font-semibold">{formatDate(form.issueDate)}</span></p>
+          <p className="text-[9px] text-gray-500">Due Date: <span className="font-semibold">{formatDate(form.dueDate)}</span></p>
+        </div>
+      </div>
+      <div className="px-6">
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="bg-[#1a1a2e] text-white p-2 text-left text-[9px] uppercase">Product Description</th>
+              <th className="bg-orange-500 text-white p-2 text-right text-[9px] uppercase">Price</th>
+              <th className="bg-orange-500 text-white p-2 text-right text-[9px] uppercase">Qty</th>
+              <th className="bg-orange-500 text-white p-2 text-right text-[9px] uppercase">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {form.items.map((it, i) => (
+              <tr key={it.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                <td className="p-2 font-semibold">{it.description || "—"}</td>
+                <td className="p-2 text-right tabular-nums">{formatCurrency(it.rate, currency)}</td>
+                <td className="p-2 text-right">{it.quantity}</td>
+                <td className="p-2 text-right font-semibold tabular-nums">{formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0), currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex justify-between px-6 mt-4 gap-4">
+        {form.upiId && form.paymentType !== "none" && (
+          <div>
+            <p className="font-bold text-[9px] text-gray-700 mb-1">Payment Option</p>
+            <p className="text-[9px] text-gray-600">{form.upiId}</p>
+            {form.bankName && <p className="text-[9px] text-gray-600">Account: {form.bankName}</p>}
+            {form.bankAccount && <p className="text-[9px] text-gray-600">No: {form.bankAccount}</p>}
+          </div>
+        )}
+        <div className="w-48 space-y-1 ml-auto">
+          <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>: {formatCurrency(totals.subtotal, currency)}</span></div>
+          <div className="flex justify-between text-gray-600"><span>Tax</span><span>: {form.taxRate}%</span></div>
+          {totals.discountAmt > 0 && <div className="flex justify-between text-gray-600"><span>Discount</span><span>: −{formatCurrency(totals.discountAmt, currency)}</span></div>}
+          <div className="flex justify-between font-bold bg-[#1a1a2e] text-white px-2 py-1 mt-1">
+            <span>GRAND TOTAL</span>
+            <div className="bg-orange-500 px-2 -mr-2 flex items-center">
+              <span className="tabular-nums">{formatCurrency(totals.total, currency)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-between items-end px-6 mt-6 pb-4">
+        <div>
+          <p className="font-extrabold text-sm">THANK YOU</p>
+          <p className="font-extrabold text-sm">FOR YOUR BUSINESS</p>
+          {form.notes && <p className="text-[8px] text-gray-500 mt-1 max-w-[180px]">{form.notes}</p>}
+        </div>
+        <div className="text-right">
+          <p className="font-bold text-sm">{form.business?.name}</p>
+          <p className="text-[9px] text-gray-500">Accounting manager</p>
+          <p className="italic text-[10px] mt-1 text-gray-600">{form.business?.name}</p>
+        </div>
+      </div>
+      <div className="flex bg-[#1a1a2e] mt-2">
+        <div className="flex-1 h-3" />
+        <div className="w-16 h-3 bg-orange-500 skew-x-12" />
+        <div className="w-8 h-3 bg-orange-500" />
+      </div>
+    </div>
   );
 }
