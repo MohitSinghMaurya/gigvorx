@@ -1,28 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
-const URL =
-  import.meta.env.VITE_SUPABASE_URL ||
-  import.meta.env.REACT_APP_SUPABASE_URL;
+const URL = "https://fdlbarxvdtifawunvndz.supabase.co";
 
-const KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.REACT_APP_SUPABASE_ANON_KEY;
+const KEY = "sb_publishable_IIaedv182GTrEvFdufEMoA_V-L9iZv5";
 
-export const supabase =
-  URL && KEY
-    ? createClient(URL, KEY, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: false,
-        },
-      })
-    : null;
+export const supabase = createClient(URL, KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+  },
+});
 
-export const isSupabaseEnabled = Boolean(supabase);
+export const isSupabaseEnabled = true;
 
-if (!supabase) {
-  console.warn(
-    "Supabase is not enabled. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables."
-  );
-}
+console.log("Supabase connected:", Boolean(supabase));
