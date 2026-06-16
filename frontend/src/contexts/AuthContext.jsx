@@ -19,6 +19,11 @@ const DEMO_USER = {
   password: "demo1234",
   plan: "trial",
   role: "user",
+  planStatus: "trial",
+  billingStatus: "free",
+  subscriptionActive: false,
+  earlyAccessStartedAt: null,
+  lastActiveAt: null,
   createdAt: "2025-01-15T00:00:00.000Z",
   trialEndsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
 };
@@ -30,6 +35,11 @@ const ADMIN_USER = {
   password: "admin1234",
   plan: "agency",
   role: "admin",
+  planStatus: "early_access",
+  billingStatus: "free_beta",
+  subscriptionActive: true,
+  earlyAccessStartedAt: new Date().toISOString(),
+  lastActiveAt: null,
   createdAt: "2025-01-01T00:00:00.000Z",
   trialEndsAt: null,
 };
@@ -80,21 +90,44 @@ function saveEarlyAccessLocal(plan) {
 
   if (!cleanPlan) return;
 
+  const now = new Date().toISOString();
+
   localStorage.setItem("gigvorx_early_access_plan", cleanPlan);
   localStorage.setItem("gigvorx_plan_status", "early_access");
   localStorage.setItem("gigvorx_billing_status", "free_beta");
   localStorage.setItem("gigvorx_subscription_active", "true");
 
   if (!localStorage.getItem("gigvorx_early_access_started_at")) {
-    localStorage.setItem(
-      "gigvorx_early_access_started_at",
-      new Date().toISOString()
-    );
+    localStorage.setItem("gigvorx_early_access_started_at", now);
   }
+}
+
+function mapDbProfileToUser(data, authUser = null) {
+  return {
+    id: data.id,
+    email: data.email || authUser?.email,
+    name:
+      data.name ||
+      authUser?.user_metadata?.name ||
+      authUser?.email?.split("@")[0] ||
+      "User",
+    plan: data.plan || "trial",
+    role: data.role || "user",
+    planStatus: data.plan_status || "trial",
+    billingStatus: data.billing_status || "free",
+    subscriptionActive: Boolean(data.subscription_active),
+    earlyAccessStartedAt: data.early_access_started_at || null,
+    lastActiveAt: data.last_active_at || null,
+    trialEndsAt: data.trial_ends_at || null,
+    createdAt: data.created_at || authUser?.created_at || new Date().toISOString(),
+  };
 }
 
 async function saveProfileToSupabase(profile) {
   if (!supabase || !profile?.id) return { error: null };
+
+  const now = new Date().toISOString();
+  const isPaidOrEarlyAccess = profile.plan && profile.plan !== "trial";
 
   const profilePayload = {
     id: profile.id,
@@ -102,8 +135,28 @@ async function saveProfileToSupabase(profile) {
     name: profile.name || profile.email?.split("@")[0] || "User",
     plan: profile.plan || "trial",
     role: profile.role || "user",
-    trial_ends_at: profile.trialEndsAt || profile.trial_ends_at || null,
-    updated_at: new Date().toISOString(),
+    trial_ends_at: isPaidOrEarlyAccess
+      ? null
+      : profile.trialEndsAt || profile.trial_ends_at || null,
+    plan_status: isPaidOrEarlyAccess
+      ? profile.planStatus || profile.plan_status || "early_access"
+      : profile.planStatus || profile.plan_status || "trial",
+    billing_status: isPaidOrEarlyAccess
+      ? profile.billingStatus || profile.billing_status || "free_beta"
+      : profile.billingStatus || profile.billing_status || "free",
+    subscription_active: isPaidOrEarlyAccess
+      ? true
+      : Boolean(profile.subscriptionActive || profile.subscription_active),
+    early_access_started_at: isPaidOrEarlyAccess
+      ? profile.earlyAccessStartedAt ||
+        profile.early_access_started_at ||
+        now
+      : profile.earlyAccessStartedAt ||
+        profile.early_access_started_at ||
+        null,
+    last_active_at:
+      profile.lastActiveAt || profile.last_active_at || null,
+    updated_at: now,
   };
 
   return await supabase.from("users_profiles").upsert(profilePayload);
@@ -125,30 +178,25 @@ async function loadProfile(authUser) {
   const localEarlyAccessPlan = getPendingEarlyAccessPlan();
 
   if (data) {
-    const finalPlan = localEarlyAccessPlan || data.plan || "trial";
+    const dbProfile = mapDbProfileToUser(data, authUser);
+    const finalPlan = localEarlyAccessPlan || dbProfile.plan || "trial";
+    const isEarlyAccess = finalPlan !== "trial";
 
     const finalProfile = {
-      id: data.id,
-      email: data.email || authUser.email,
-      name:
-        data.name ||
-        authUser.user_metadata?.name ||
-        authUser.email?.split("@")[0] ||
-        "User",
+      ...dbProfile,
       plan: finalPlan,
-      role: data.role || "user",
-      trialEndsAt: finalPlan === "trial" ? data.trial_ends_at : null,
-      createdAt: data.created_at || authUser.created_at,
+      trialEndsAt: isEarlyAccess ? null : dbProfile.trialEndsAt,
+      planStatus: isEarlyAccess ? "early_access" : dbProfile.planStatus || "trial",
+      billingStatus: isEarlyAccess ? "free_beta" : dbProfile.billingStatus || "free",
+      subscriptionActive: isEarlyAccess ? true : dbProfile.subscriptionActive,
+      earlyAccessStartedAt: isEarlyAccess
+        ? dbProfile.earlyAccessStartedAt || new Date().toISOString()
+        : dbProfile.earlyAccessStartedAt,
     };
 
     if (localEarlyAccessPlan && localEarlyAccessPlan !== data.plan) {
       saveEarlyAccessLocal(localEarlyAccessPlan);
-
-      await saveProfileToSupabase({
-        ...finalProfile,
-        trialEndsAt: null,
-      });
-
+      await saveProfileToSupabase(finalProfile);
       localStorage.removeItem("gigvorx_pending_plan");
     }
 
@@ -156,6 +204,8 @@ async function loadProfile(authUser) {
   }
 
   const newPlan = localEarlyAccessPlan || "trial";
+  const isEarlyAccess = newPlan !== "trial";
+  const now = new Date().toISOString();
 
   const newProfile = {
     id: authUser.id,
@@ -163,11 +213,15 @@ async function loadProfile(authUser) {
     name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "User",
     plan: newPlan,
     role: "user",
-    trialEndsAt:
-      newPlan === "trial"
-        ? new Date(Date.now() + 7 * 86400000).toISOString()
-        : null,
-    createdAt: authUser.created_at || new Date().toISOString(),
+    planStatus: isEarlyAccess ? "early_access" : "trial",
+    billingStatus: isEarlyAccess ? "free_beta" : "free",
+    subscriptionActive: isEarlyAccess,
+    earlyAccessStartedAt: isEarlyAccess ? now : null,
+    lastActiveAt: null,
+    trialEndsAt: isEarlyAccess
+      ? null
+      : new Date(Date.now() + 7 * 86400000).toISOString(),
+    createdAt: authUser.created_at || now,
   };
 
   await saveProfileToSupabase(newProfile);
@@ -180,9 +234,50 @@ async function loadProfile(authUser) {
   return newProfile;
 }
 
+async function trackUserActivity(userId, eventName = "app_opened", eventData = {}) {
+  if (!supabase || !userId || !isSupabaseEnabled) return;
+
+  const now = new Date().toISOString();
+
+  try {
+    await supabase
+      .from("users_profiles")
+      .update({
+        last_active_at: now,
+        updated_at: now,
+      })
+      .eq("id", userId);
+
+    await supabase.from("analytics_events").insert({
+      user_id: userId,
+      event_name: eventName,
+      event_data: eventData,
+      created_at: now,
+    });
+  } catch (error) {
+    console.error("Activity tracking failed:", error);
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.id || !isSupabaseEnabled) return;
+
+    trackUserActivity(user.id, "app_opened", {
+      page: window.location.pathname,
+    });
+
+    const interval = setInterval(() => {
+      trackUserActivity(user.id, "user_active", {
+        page: window.location.pathname,
+      });
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [user?.id]);
 
   const activateEarlyAccessPlan = useCallback(
     async (planFromInput) => {
@@ -191,6 +286,8 @@ export function AuthProvider({ children }) {
       if (!selectedPlan) {
         throw new Error("Invalid plan selected.");
       }
+
+      const now = new Date().toISOString();
 
       saveEarlyAccessLocal(selectedPlan);
 
@@ -203,6 +300,10 @@ export function AuthProvider({ children }) {
         ...user,
         plan: selectedPlan,
         trialEndsAt: null,
+        planStatus: "early_access",
+        billingStatus: "free_beta",
+        subscriptionActive: true,
+        earlyAccessStartedAt: user.earlyAccessStartedAt || now,
       };
 
       if (isSupabaseEnabled) {
@@ -212,6 +313,10 @@ export function AuthProvider({ children }) {
           console.error("Early access update failed:", error);
           throw new Error(error.message || "Failed to activate early access.");
         }
+
+        await trackUserActivity(user.id, "early_access_activated", {
+          plan: selectedPlan,
+        });
       } else {
         const users = readGlobal("users", []);
 
@@ -223,6 +328,10 @@ export function AuthProvider({ children }) {
                   ...u,
                   plan: selectedPlan,
                   trialEndsAt: null,
+                  planStatus: "early_access",
+                  billingStatus: "free_beta",
+                  subscriptionActive: true,
+                  earlyAccessStartedAt: u.earlyAccessStartedAt || now,
                 }
               : u
           )
@@ -244,12 +353,18 @@ export function AuthProvider({ children }) {
 
     if (!pendingPlan) return profile;
 
+    const now = new Date().toISOString();
+
     saveEarlyAccessLocal(pendingPlan);
 
     const updatedProfile = {
       ...profile,
       plan: pendingPlan,
       trialEndsAt: null,
+      planStatus: "early_access",
+      billingStatus: "free_beta",
+      subscriptionActive: true,
+      earlyAccessStartedAt: profile.earlyAccessStartedAt || now,
     };
 
     if (isSupabaseEnabled) {
@@ -258,6 +373,11 @@ export function AuthProvider({ children }) {
       if (error) {
         console.error("Failed to save pending early access plan:", error);
       }
+
+      await trackUserActivity(profile.id, "early_access_activated", {
+        plan: pendingPlan,
+        source: "pending_plan",
+      });
     } else {
       const users = readGlobal("users", []);
 
@@ -269,6 +389,10 @@ export function AuthProvider({ children }) {
                 ...u,
                 plan: pendingPlan,
                 trialEndsAt: null,
+                planStatus: "early_access",
+                billingStatus: "free_beta",
+                subscriptionActive: true,
+                earlyAccessStartedAt: u.earlyAccessStartedAt || now,
               }
             : u
         )
@@ -282,6 +406,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    let authSubscription = null;
+
     seedUsers();
 
     async function init() {
@@ -295,24 +421,22 @@ export function AuthProvider({ children }) {
           if (mounted) setUser(finalProfile);
         }
 
-        const {
-          data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (_event, session) => {
-          if (!mounted) return;
+        const authListener = supabase.auth.onAuthStateChange(
+          async (_event, session) => {
+            if (!mounted) return;
 
-          if (session?.user) {
-            const profile = await loadProfile(session.user);
-            const finalProfile = await applyPendingEarlyAccessToProfile(profile);
+            if (session?.user) {
+              const profile = await loadProfile(session.user);
+              const finalProfile = await applyPendingEarlyAccessToProfile(profile);
 
-            if (mounted) setUser(finalProfile);
-          } else {
-            setUser(null);
+              if (mounted) setUser(finalProfile);
+            } else {
+              setUser(null);
+            }
           }
-        });
+        );
 
-        return () => {
-          subscription?.unsubscribe?.();
-        };
+        authSubscription = authListener?.data?.subscription;
       } else {
         const sessionId = localStorage.getItem("gv_session");
 
@@ -338,6 +462,7 @@ export function AuthProvider({ children }) {
 
     return () => {
       mounted = false;
+      authSubscription?.unsubscribe?.();
     };
   }, [applyPendingEarlyAccessToProfile]);
 
@@ -367,6 +492,11 @@ export function AuthProvider({ children }) {
         const finalProfile = await applyPendingEarlyAccessToProfile(profile);
 
         setUser(finalProfile);
+
+        await trackUserActivity(finalProfile.id, "login", {
+          email: finalProfile.email,
+        });
+
         return finalProfile;
       }
 
@@ -411,6 +541,11 @@ export function AuthProvider({ children }) {
           const finalProfile = await applyPendingEarlyAccessToProfile(profile);
 
           setUser(finalProfile);
+
+          await trackUserActivity(finalProfile.id, "signup", {
+            email: finalProfile.email,
+          });
+
           return finalProfile;
         }
 
@@ -424,6 +559,7 @@ export function AuthProvider({ children }) {
       }
 
       const pendingPlan = getPendingEarlyAccessPlan();
+      const now = new Date().toISOString();
 
       const newUser = {
         id: uid(),
@@ -432,7 +568,12 @@ export function AuthProvider({ children }) {
         password,
         plan: pendingPlan || "trial",
         role: "user",
-        createdAt: new Date().toISOString(),
+        planStatus: pendingPlan ? "early_access" : "trial",
+        billingStatus: pendingPlan ? "free_beta" : "free",
+        subscriptionActive: Boolean(pendingPlan),
+        earlyAccessStartedAt: pendingPlan ? now : null,
+        lastActiveAt: now,
+        createdAt: now,
         trialEndsAt: pendingPlan
           ? null
           : new Date(Date.now() + 7 * 86400000).toISOString(),
@@ -455,13 +596,19 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(async () => {
+    if (user?.id && isSupabaseEnabled) {
+      await trackUserActivity(user.id, "logout", {
+        page: window.location.pathname,
+      });
+    }
+
     if (isSupabaseEnabled) {
       await supabase.auth.signOut();
     }
 
     localStorage.removeItem("gv_session");
     setUser(null);
-  }, []);
+  }, [user?.id]);
 
   const updateUser = useCallback(
     async (updates) => {
@@ -473,7 +620,15 @@ export function AuthProvider({ children }) {
       };
 
       if (updates.plan && updates.plan !== "trial") {
+        const now = new Date().toISOString();
+
         updatedUser.trialEndsAt = null;
+        updatedUser.planStatus = updates.planStatus || "early_access";
+        updatedUser.billingStatus = updates.billingStatus || "free_beta";
+        updatedUser.subscriptionActive = true;
+        updatedUser.earlyAccessStartedAt =
+          user.earlyAccessStartedAt || now;
+
         saveEarlyAccessLocal(updates.plan);
       }
 
@@ -484,6 +639,10 @@ export function AuthProvider({ children }) {
           console.error("Failed to update user:", error);
           throw new Error(error.message || "Failed to update user.");
         }
+
+        await trackUserActivity(user.id, "profile_updated", {
+          fields: Object.keys(updates),
+        });
       } else {
         const users = readGlobal("users", []);
 
@@ -513,6 +672,15 @@ export function AuthProvider({ children }) {
     [activateEarlyAccessPlan]
   );
 
+  const trackEvent = useCallback(
+    async (eventName, eventData = {}) => {
+      if (!user?.id) return;
+
+      await trackUserActivity(user.id, eventName, eventData);
+    },
+    [user?.id]
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -524,6 +692,7 @@ export function AuthProvider({ children }) {
         updateUser,
         upgradePlan,
         activateEarlyAccessPlan,
+        trackEvent,
         supabaseEnabled: isSupabaseEnabled,
       }}
     >
