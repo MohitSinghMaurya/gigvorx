@@ -25,24 +25,51 @@ import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
 
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin" />
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin" />
-      </div>
-    );
+
+  if (isLoading) return <LoadingScreen />;
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+
+  return <AppLayout>{children}</AppLayout>;
+}
+
+function AdminRoute({ children }) {
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) return <LoadingScreen />;
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (user.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <AppLayout>{children}</AppLayout>;
 }
 
 function PublicOnly({ children }) {
   const { user, isLoading } = useAuth();
+
   if (isLoading) return null;
+
   if (user) return <Navigate to="/dashboard" replace />;
+
   return children;
 }
 
@@ -67,8 +94,9 @@ function AppRoutes() {
       <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceEditor /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-      <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="/pricing-app" element={<ProtectedRoute><Pricing inApp /></ProtectedRoute>} />
+
+      <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
 
       <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
       <Route path="/privacy" element={<PublicLayout><Privacy /></PublicLayout>} />
