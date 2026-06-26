@@ -24,6 +24,7 @@ import NotFound from "@/pages/NotFound";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
+import PublicIntakeForm from "@/pages/PublicIntakeForm";
 
 function LoadingScreen() {
   return (
@@ -36,40 +37,30 @@ function LoadingScreen() {
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
-
   if (isLoading) return <LoadingScreen />;
-
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-
   return <AppLayout>{children}</AppLayout>;
 }
 
 function AdminRoute({ children }) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
-
   if (isLoading) return <LoadingScreen />;
-
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-
   if (user.role !== "admin") {
     return <Navigate to="/dashboard" replace />;
   }
-
   return <AppLayout>{children}</AppLayout>;
 }
 
 function PublicOnly({ children }) {
   const { user, isLoading } = useAuth();
-
   if (isLoading) return null;
-
   if (user) return <Navigate to="/dashboard" replace />;
-
   return children;
 }
 
@@ -80,6 +71,9 @@ function AppRoutes() {
       <Route path="/pricing" element={<PublicLayout><Pricing /></PublicLayout>} />
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
+
+      {/* PUBLIC INTAKE FORM - No login required */}
+      <Route path="/intake/:shareToken" element={<PublicLayout><PublicIntakeForm /></PublicLayout>} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
