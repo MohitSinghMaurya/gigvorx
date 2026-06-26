@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
+import SmartNicheBrief from "@/components/SmartNicheBrief";
 
 const SECTIONS_TEMPLATE = (niche) => ({
   overview: `# Project Overview\n\nA ${niche?.name || "professional"} engagement focused on delivering measurable outcomes within an agreed scope and timeline.`,
@@ -106,9 +107,6 @@ export default function BriefEditor() {
   const niche = findNiche(form.niche);
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setSection = (k, v) => setForm(f => ({ ...f, sections: { ...f.sections, [k]: v } }));
-  const updateQuestion = (qid, patch) => setForm(f => ({ ...f, questions: f.questions.map(q => q.id === qid ? { ...q, ...patch } : q) }));
-  const removeQuestion = (qid) => setForm(f => ({ ...f, questions: f.questions.filter(q => q.id !== qid) }));
-  const addQuestion = () => setForm(f => ({ ...f, questions: [...f.questions, { id: Math.random().toString(36).slice(2), q: "", a: "", custom: true }] }));
 
   // ─── Save current questions as template ───
   const handleSaveTemplate = () => {
@@ -276,12 +274,11 @@ export default function BriefEditor() {
               </section>
             ))}
 
-            {/* Q&A Section */}
+            {/* Smart Niche Q&A Section with File Uploads */}
             <section>
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground">Questions &amp; Answers</p>
                 <div className="flex gap-2 flex-wrap">
-                  {/* Load template button */}
                   <Button
                     size="sm"
                     variant="outline"
@@ -296,7 +293,6 @@ export default function BriefEditor() {
                       </span>
                     )}
                   </Button>
-                  {/* Save template button */}
                   <Button
                     size="sm"
                     variant="outline"
@@ -306,52 +302,14 @@ export default function BriefEditor() {
                     <BookMarked className="w-3.5 h-3.5 mr-1" />
                     Save as template
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={addQuestion} data-testid="brief-add-question" className="h-7 text-xs">
-                    <Plus className="w-3.5 h-3.5 mr-1" />Add question
-                  </Button>
                 </div>
               </div>
 
-              {form.questions.length === 0 && (
-                <div className="text-center py-8 border border-dashed rounded-lg text-muted-foreground text-sm">
-                  <p>No questions yet.</p>
-                  <p className="mt-1">Add a question or load a saved template.</p>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {form.questions.map((q, i) => (
-                  <div key={q.id} className="p-4 rounded-lg border bg-muted/20 group">
-                    <div className="flex items-start gap-2">
-                      <GripVertical className="w-4 h-4 mt-2 text-muted-foreground/40 shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <Input
-                          data-testid={`brief-q-${i}`}
-                          value={q.q}
-                          onChange={(e) => updateQuestion(q.id, { q: e.target.value })}
-                          className="font-semibold border-0 bg-transparent px-0 focus-visible:ring-0"
-                          placeholder={`Question ${i + 1}`}
-                        />
-                        <Textarea
-                          data-testid={`brief-a-${i}`}
-                          value={q.a}
-                          onChange={(e) => updateQuestion(q.id, { a: e.target.value })}
-                          rows={2}
-                          placeholder="Client's answer…"
-                          className="border-0 bg-transparent px-0 focus-visible:ring-0 text-muted-foreground"
-                        />
-                      </div>
-                      <button
-                        onClick={() => removeQuestion(q.id)}
-                        data-testid={`brief-remove-q-${i}`}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SmartNicheBrief
+                nicheSlug={form.niche}
+                questions={form.questions}
+                onQuestionsChange={(newQuestions) => setForm(f => ({ ...f, questions: newQuestions }))}
+              />
             </section>
 
             <section>
