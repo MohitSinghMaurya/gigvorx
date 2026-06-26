@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, createRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { findNiche, NICHES } from "@/lib/niches";
@@ -56,6 +56,9 @@ export default function PublicIntakeForm() {
   const [answers, setAnswers] = useState({});
   const [files, setFiles] = useState({});
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Use refs for file inputs
+  const fileInputRefs = useRef({});
 
   useEffect(() => {
     async function loadSharedBrief() {
@@ -122,10 +125,11 @@ export default function PublicIntakeForm() {
   };
 
   const handleFileChange = (questionId, e) => {
-    const newFiles = Array.from(e.target.files);
+    const selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length === 0) return;
     setFiles(prev => ({
       ...prev,
-      [questionId]: [...(prev[questionId] || []), ...newFiles]
+      [questionId]: [...(prev[questionId] || []), ...selectedFiles]
     }));
   };
 
@@ -134,6 +138,13 @@ export default function PublicIntakeForm() {
       ...prev,
       [questionId]: prev[questionId]?.filter((_, i) => i !== index) || []
     }));
+  };
+
+  const triggerFileInput = (questionId) => {
+    const inputRef = fileInputRefs.current[questionId];
+    if (inputRef) {
+      inputRef.click();
+    }
   };
 
   const completionPercent = () => {
@@ -308,162 +319,6 @@ export default function PublicIntakeForm() {
   const niche = findNiche(briefConfig?.niche || "web-design");
   const pct = completionPercent();
 
-  const renderQuestionInput = (q) => {
-    const type = q.type || "long";
-    const typeConfig = QUESTION_TYPES[type] || QUESTION_TYPES.long;
-
-    if (type === "text") {
-      return (
-        <Input
-          value={answers[q.id] || ""}
-          onChange={(e) => updateAnswer(q.id, e.target.value)}
-          placeholder={typeConfig.placeholder}
-          className="w-full"
-        />
-      );
-    }
-
-    if (type === "long") {
-      return (
-        <Textarea
-          value={answers[q.id] || ""}
-          onChange={(e) => updateAnswer(q.id, e.target.value)}
-          placeholder={typeConfig.placeholder}
-          rows={4}
-          className="resize-y"
-        />
-      );
-    }
-
-    if (type === "select") {
-      return (
-        <div className="space-y-2">
-          {(q.options || []).map((opt, i) => (
-            <label key={i} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/30 transition-colors">
-              <input
-                type="radio"
-                name={`question-${q.id}`}
-                value={opt}
-                checked={answers[q.id] === opt}
-                onChange={(e) => updateAnswer(q.id, e.target.value)}
-                className="w-4 h-4 accent-foreground"
-              />
-              <span className="text-sm">{opt}</span>
-            </label>
-          ))}
-          {(!q.options || q.options.length === 0) && (
-            <p className="text-sm text-muted-foreground">No options available for this question.</p>
-          )}
-        </div>
-      );
-    }
-
-    if (type === "file") {
-      return (
-        <div className="space-y-2">
-          <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors cursor-pointer">
-            <input type="file" multiple onChange={(e) => handleFileChange(q.id, e)} className="hidden" id={`file-${q.id}`} accept=".pdf,.doc,.docx,.zip,.txt" />
-            <label htmlFor={`file-${q.id}`} className="cursor-pointer block">
-              <FileUp className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium">Click to upload files</p>
-              <p className="text-xs text-muted-foreground mt-1">PDF, DOC, ZIP up to 10MB each</p>
-            </label>
-          </div>
-          {files[q.id]?.length > 0 && (
-            <div className="space-y-1.5">
-              {files[q.id].map((file, i) => (
-                <div key={i} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg text-sm">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span className="truncate">{file.name}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
-                  </div>
-                  <button onClick={() => removeFile(q.id, i)} className="text-muted-foreground hover:text-destructive shrink-0"><X className="w-4 h-4" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (type === "image") {
-      return (
-        <div className="space-y-2">
-          <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors cursor-pointer">
-            <input type="file" multiple onChange={(e) => handleFileChange(q.id, e)} className="hidden" id={`image-${q.id}`} accept=".png,.jpg,.jpeg,.gif,.webp" />
-            <label htmlFor={`image-${q.id}`} className="cursor-pointer block">
-              <Image className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium">Click to upload images</p>
-              <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF, WEBP up to 10MB each</p>
-            </label>
-          </div>
-          {files[q.id]?.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              {files[q.id].map((file, i) => (
-                <div key={i} className="relative group">
-                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
-                    <Image className="w-6 h-6" />
-                  </div>
-                  <p className="text-[10px] truncate mt-1">{file.name}</p>
-                  <button onClick={() => removeFile(q.id, i)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (type === "link") {
-      return (
-        <div className="space-y-2">
-          <Input
-            value={answers[q.id] || ""}
-            onChange={(e) => updateAnswer(q.id, e.target.value)}
-            placeholder={typeConfig.placeholder}
-            className="w-full"
-          />
-          {answers[q.id] && (
-            <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
-              <ExternalLink className="w-3 h-3" />Open link
-            </a>
-          )}
-        </div>
-      );
-    }
-
-    if (type === "video") {
-      return (
-        <div className="space-y-2">
-          <Input
-            value={answers[q.id] || ""}
-            onChange={(e) => updateAnswer(q.id, e.target.value)}
-            placeholder={typeConfig.placeholder}
-            className="w-full"
-          />
-          {answers[q.id] && (
-            <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
-              <Video className="w-3 h-3" />Watch video
-            </a>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <Textarea
-        value={answers[q.id] || ""}
-        onChange={(e) => updateAnswer(q.id, e.target.value)}
-        placeholder="Your answer..."
-        rows={3}
-        className="resize-y"
-      />
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <header className="bg-white border-b sticky top-0 z-10">
@@ -491,32 +346,61 @@ export default function PublicIntakeForm() {
           <div className="p-6 md:p-8">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{briefConfig?.title}</h1>
             <p className="text-muted-foreground mb-8">{briefConfig?.description}</p>
+
+            {/* Contact Info */}
             <div className="space-y-4 mb-8">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Your Contact Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> Full Name *</Label>
-                  <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="John Doe" className="mt-1.5" required />
+                  <Input 
+                    value={clientName} 
+                    onChange={(e) => setClientName(e.target.value)} 
+                    placeholder="John Doe" 
+                    className="mt-1.5" 
+                    required 
+                  />
                 </div>
                 <div>
                   <Label className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email *</Label>
-                  <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="john@company.com" className="mt-1.5" required />
+                  <Input 
+                    type="email" 
+                    value={clientEmail} 
+                    onChange={(e) => setClientEmail(e.target.value)} 
+                    placeholder="john@company.com" 
+                    className="mt-1.5" 
+                    required 
+                  />
                 </div>
                 <div>
                   <Label className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</Label>
-                  <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+91 98765 43210" className="mt-1.5" />
+                  <Input 
+                    value={clientPhone} 
+                    onChange={(e) => setClientPhone(e.target.value)} 
+                    placeholder="+91 98765 43210" 
+                    className="mt-1.5" 
+                  />
                 </div>
                 <div>
                   <Label>Company</Label>
-                  <Input value={clientCompany} onChange={(e) => setClientCompany(e.target.value)} placeholder="Acme Inc." className="mt-1.5" />
+                  <Input 
+                    value={clientCompany} 
+                    onChange={(e) => setClientCompany(e.target.value)} 
+                    placeholder="Acme Inc." 
+                    className="mt-1.5" 
+                  />
                 </div>
               </div>
             </div>
+
+            {/* Project Questions */}
             <div className="space-y-6 mb-8">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Project Questions</h3>
               {briefConfig?.questions.map((q, i) => {
                 const typeConfig = QUESTION_TYPES[q.type] || QUESTION_TYPES.long;
                 const TypeIcon = typeConfig.icon;
+                const qType = q.type || "long";
+
                 return (
                   <div key={q.id} className="space-y-2">
                     <Label className="text-sm font-medium leading-relaxed flex items-center gap-2">
@@ -527,11 +411,165 @@ export default function PublicIntakeForm() {
                         {typeConfig.label}
                       </Badge>
                     </Label>
-                    {renderQuestionInput(q)}
+
+                    {/* SHORT ANSWER */}
+                    {qType === "text" && (
+                      <Input
+                        value={answers[q.id] || ""}
+                        onChange={(e) => updateAnswer(q.id, e.target.value)}
+                        placeholder={typeConfig.placeholder}
+                      />
+                    )}
+
+                    {/* LONG ANSWER */}
+                    {qType === "long" && (
+                      <Textarea
+                        value={answers[q.id] || ""}
+                        onChange={(e) => updateAnswer(q.id, e.target.value)}
+                        placeholder={typeConfig.placeholder}
+                        rows={4}
+                        className="resize-y"
+                      />
+                    )}
+
+                    {/* MULTIPLE CHOICE */}
+                    {qType === "select" && (
+                      <div className="space-y-2">
+                        {(q.options || []).map((opt, idx) => (
+                          <label key={idx} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/30 transition-colors">
+                            <input
+                              type="radio"
+                              name={`question-${q.id}`}
+                              value={opt}
+                              checked={answers[q.id] === opt}
+                              onChange={(e) => updateAnswer(q.id, e.target.value)}
+                              className="w-4 h-4 accent-foreground"
+                            />
+                            <span className="text-sm">{opt}</span>
+                          </label>
+                        ))}
+                        {(!q.options || q.options.length === 0) && (
+                          <p className="text-sm text-muted-foreground">No options available for this question.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* FILE UPLOAD */}
+                    {qType === "file" && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          className="w-full border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors"
+                          onClick={() => triggerFileInput(q.id)}
+                        >
+                          <FileUp className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm font-medium">Click to upload files</p>
+                          <p className="text-xs text-muted-foreground mt-1">PDF, DOC, ZIP up to 10MB each</p>
+                        </button>
+                        <input
+                          type="file"
+                          multiple
+                          ref={el => { fileInputRefs.current[q.id] = el; }}
+                          onChange={(e) => handleFileChange(q.id, e)}
+                          accept=".pdf,.doc,.docx,.zip,.txt"
+                          className="sr-only"
+                          tabIndex={-1}
+                        />
+                        {files[q.id]?.length > 0 && (
+                          <div className="space-y-1.5">
+                            {files[q.id].map((file, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg text-sm">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                                  <span className="truncate">{file.name}</span>
+                                  <span className="text-xs text-muted-foreground shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+                                </div>
+                                <button type="button" onClick={() => removeFile(q.id, idx)} className="text-muted-foreground hover:text-destructive shrink-0">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* IMAGE UPLOAD */}
+                    {qType === "image" && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          className="w-full border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors"
+                          onClick={() => triggerFileInput(q.id)}
+                        >
+                          <Image className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm font-medium">Click to upload images</p>
+                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF, WEBP up to 10MB each</p>
+                        </button>
+                        <input
+                          type="file"
+                          multiple
+                          ref={el => { fileInputRefs.current[q.id] = el; }}
+                          onChange={(e) => handleFileChange(q.id, e)}
+                          accept="image/*"
+                          className="sr-only"
+                          tabIndex={-1}
+                        />
+                        {files[q.id]?.length > 0 && (
+                          <div className="grid grid-cols-3 gap-2">
+                            {files[q.id].map((file, idx) => (
+                              <div key={idx} className="relative group">
+                                <div className="aspect-square rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
+                                  <Image className="w-6 h-6" />
+                                </div>
+                                <p className="text-[10px] truncate mt-1">{file.name}</p>
+                                <button type="button" onClick={() => removeFile(q.id, idx)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LINK */}
+                    {qType === "link" && (
+                      <div className="space-y-2">
+                        <Input
+                          value={answers[q.id] || ""}
+                          onChange={(e) => updateAnswer(q.id, e.target.value)}
+                          placeholder={typeConfig.placeholder}
+                        />
+                        {answers[q.id] && (
+                          <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                            <ExternalLink className="w-3 h-3" />Open link
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* VIDEO */}
+                    {qType === "video" && (
+                      <div className="space-y-2">
+                        <Input
+                          value={answers[q.id] || ""}
+                          onChange={(e) => updateAnswer(q.id, e.target.value)}
+                          placeholder={typeConfig.placeholder}
+                        />
+                        {answers[q.id] && (
+                          <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                            <Video className="w-3 h-3" />Watch video
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {/* Submit */}
             <div className="pt-6 border-t">
               {submitting && (
                 <div className="mb-4">
