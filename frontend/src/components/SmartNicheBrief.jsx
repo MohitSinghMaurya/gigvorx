@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,8 +10,25 @@ import { supabase } from "@/lib/supabase";
 import { 
   Upload, Link2, Image, FileText, X, Check, Palette, 
   Globe, Share2, Video, Search, Smartphone, Briefcase,
-  Monitor, Instagram, Linkedin, Twitter, Youtube
+  Monitor, Instagram, Linkedin, Twitter, Youtube,
+  Plus, Trash2, BookMarked, FolderOpen, GripVertical
 } from "lucide-react";
+
+// ===== TEMPLATE HELPERS =====
+function getCustomTemplatesKey(userId) {
+  return `gv_custom_question_templates_${userId}`;
+}
+
+function loadCustomTemplates(userId) {
+  try {
+    const raw = localStorage.getItem(getCustomTemplatesKey(userId));
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveCustomTemplates(userId, templates) {
+  localStorage.setItem(getCustomTemplatesKey(userId), JSON.stringify(templates));
+}
 
 // ===== NICHE-SPECIFIC SMART QUESTIONS =====
 export const NICHE_QUESTIONS = {
@@ -83,8 +100,8 @@ export const NICHE_QUESTIONS = {
       {
         id: "budget_range",
         label: "What is your budget range?",
-        type: "select",
-        options: ["Under INR 25,000", "INR 25,000 - 50,000", "INR 50,000 - 1,00,000", "INR 1,00,000+", "Prefer not to say"],
+        type: "budget",
+        placeholder: "e.g. 50000",
       },
     ],
   },
@@ -413,8 +430,8 @@ export const NICHE_QUESTIONS = {
       {
         id: "budget",
         label: "What is your budget range?",
-        type: "select",
-        options: ["Under INR 10,000", "INR 10,000 - 25,000", "INR 25,000 - 50,000", "INR 50,000 - 1,00,000", "INR 1,00,000+", "Prefer to discuss"],
+        type: "budget",
+        placeholder: "e.g. 25000",
       },
       {
         id: "timeline",
@@ -656,14 +673,15 @@ function ColorPickerField({ value, onChange }) {
   );
 }
 
-// ===== MULTI-SELECT =====
+// ===== MULTI-SELECT (FIXED) =====
 function MultiSelectField({ question, value, onChange }) {
-  const selected = value || [];
+  const [selected, setSelected] = useState(value || []);
 
   const toggle = (option) => {
     const newSelected = selected.includes(option)
       ? selected.filter(s => s !== option)
       : [...selected, option];
+    setSelected(newSelected);
     onChange(newSelected);
   };
 
@@ -688,17 +706,24 @@ function MultiSelectField({ question, value, onChange }) {
   );
 }
 
-// ===== TOGGLE =====
+// ===== TOGGLE (FIXED) =====
 function ToggleField({ question, value, onChange }) {
+  const [selected, setSelected] = useState(value || '');
+
+  const handleSelect = (option) => {
+    setSelected(option);
+    onChange(option);
+  };
+
   return (
     <div className="flex flex-wrap gap-2">
       {question.options.map((option) => (
         <button
           key={option}
           type="button"
-          onClick={() => onChange(option)}
+          onClick={() => handleSelect(option)}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            value === option
+            selected === option
               ? 'bg-blue-500 text-white shadow-sm'
               : 'bg-muted text-muted-foreground hover:bg-muted/80 border'
           }`}
@@ -710,12 +735,40 @@ function ToggleField({ question, value, onChange }) {
   );
 }
 
+// ===== BUDGET FIELD (FREE TEXT) =====
+function BudgetField({ value, onChange, placeholder }) {
+  const [amount, setAmount] = useState(value || '');
+
+  const handleChange = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, '');
+    setAmount(val);
+    onChange(val);
+  };
+
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">
+        ₹
+      </span>
+      <Input
+        type="text"
+        inputMode="numeric"
+        placeholder={placeholder || "Enter amount"}
+        value={amount}
+        onChange={handleChange}
+        className="pl-8"
+      />
+    </div>
+  );
+}
+
 // ===== STRUCTURED FIELD =====
 function StructuredField({ question, value, onChange }) {
-  const data = value || {};
+  const [data, setData] = useState(value || {});
 
   const updateField = (fieldId, val) => {
     const newData = { ...data, [fieldId]: val };
+    setData(newData);
     onChange(newData);
   };
 
@@ -796,13 +849,270 @@ function MixedField({ question, value, onChange }) {
   );
 }
 
+// ===== CUSTOM QUESTION BUILDER =====
+function CustomQuestionBuilder({ onAdd, onSaveTemplate, onLoadTemplate, templates, onDeleteTemplate }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [label, setLabel] = useState('');
+  const [type, setType] = useState('text');
+  const [options, setOptions] = useState('');
+  const [placeholder, setPlaceholder] = useState('');
+  const [required, setRequired] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+
+  const handleAdd = () => {
+    if (!label.trim()) {
+      toast.error("Please enter a question label");
+      return;
+    }
+
+    const question = {
+      id: `custom_${Date.now()}`,
+      label: label.trim(),
+      type,
+      placeholder: placeholder.trim() || undefined,
+      required,
+      custom: true,
+    };
+
+    if (type === 'multi_select' || type === 'select' || type === 'toggle') {
+      const opts = options.split(',').map(o => o.trim()).filter(Boolean);
+      if (opts.length === 0) {
+        toast.error("Please enter at least one option (comma-separated)");
+        return;
+      }
+      question.options = opts;
+    }
+
+    onAdd(question);
+    setLabel('');
+    setOptions('');
+    setPlaceholder('');
+    setRequired(false);
+    setIsOpen(false);
+    toast.success("Custom question added");
+  };
+
+  const handleSaveTemplate = () => {
+    if (!label.trim()) {
+      toast.error("Please enter a question label first");
+      return;
+    }
+    onSaveTemplate(label.trim(), type, options, placeholder, required);
+    toast.success("Template saved");
+  };
+
+  return (
+    <div className="space-y-3">
+      {!isOpen ? (
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsOpen(true)}
+            className="border-dashed border-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add custom question
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowTemplates(!showTemplates)}
+          >
+            <FolderOpen className="w-4 h-4 mr-1" />
+            Saved templates
+            {templates.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-[10px]">{templates.length}</Badge>
+            )}
+          </Button>
+        </div>
+      ) : (
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-sm">Add Custom Question</h4>
+            <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-muted rounded">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-xs">Question text</Label>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g. What is your preferred communication method?"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Answer type</Label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="text">Short text</option>
+              <option value="textarea">Long text</option>
+              <option value="select">Single select (dropdown)</option>
+              <option value="multi_select">Multi select</option>
+              <option value="toggle">Toggle (one option)</option>
+              <option value="url">URL</option>
+              <option value="date">Date</option>
+              <option value="file">File upload</option>
+            </select>
+          </div>
+
+          {(type === 'select' || type === 'multi_select' || type === 'toggle') && (
+            <div className="space-y-2">
+              <Label className="text-xs">Options (comma-separated)</Label>
+              <Input
+                value={options}
+                onChange={(e) => setOptions(e.target.value)}
+                placeholder="e.g. Email, Phone, WhatsApp, Video call"
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label className="text-xs">Placeholder (optional)</Label>
+            <Input
+              value={placeholder}
+              onChange={(e) => setPlaceholder(e.target.value)}
+              placeholder="e.g. Enter your answer here..."
+            />
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={required}
+              onChange={(e) => setRequired(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm">Required question</span>
+          </label>
+
+          <div className="flex gap-2 pt-2">
+            <Button type="button" size="sm" onClick={handleAdd} className="bg-blue-600 text-white">
+              <Plus className="w-3 h-3 mr-1" />
+              Add question
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleSaveTemplate}>
+              <BookMarked className="w-3 h-3 mr-1" />
+              Save as template
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setIsOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {showTemplates && templates.length > 0 && (
+        <Card className="p-4 space-y-2">
+          <h4 className="font-semibold text-sm mb-2">Saved Question Templates</h4>
+          {templates.map((t) => (
+            <div key={t.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{t.label}</p>
+                <p className="text-xs text-muted-foreground">Type: {t.type}</p>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => { onLoadTemplate(t); setShowTemplates(false); }}
+                >
+                  Use
+                </Button>
+                <button
+                  onClick={() => onDeleteTemplate(t.id)}
+                  className="p-1 hover:bg-destructive/10 rounded"
+                >
+                  <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ===== MAIN COMPONENT =====
-export function SmartNicheBrief({ nicheSlug, value, onChange }) {
+export function SmartNicheBrief({ nicheSlug, questions, onQuestionsChange, userId }) {
   const nicheConfig = NICHE_QUESTIONS[nicheSlug] || NICHE_QUESTIONS["default"];
-  const answers = value || {};
+  const [answers, setAnswers] = useState({});
+  const [customQuestions, setCustomQuestions] = useState([]);
+  const [templates, setTemplates] = useState(() => loadCustomTemplates(userId));
+
+  // Merge default + custom questions
+  const allQuestions = [...nicheConfig.questions, ...customQuestions];
 
   const updateAnswer = (questionId, answer) => {
-    onChange({ ...answers, [questionId]: answer });
+    const newAnswers = { ...answers, [questionId]: answer };
+    setAnswers(newAnswers);
+    
+    // Convert answers back to questions format for parent
+    const updatedQuestions = allQuestions.map(q => ({
+      id: q.id,
+      q: q.label,
+      a: newAnswers[q.id] || '',
+      custom: q.custom || false,
+    }));
+    onQuestionsChange(updatedQuestions);
+  };
+
+  const addCustomQuestion = (question) => {
+    setCustomQuestions([...customQuestions, question]);
+  };
+
+  const saveTemplate = (label, type, options, placeholder, required) => {
+    const template = {
+      id: `template_${Date.now()}`,
+      label,
+      type,
+      options: options.split(',').map(o => o.trim()).filter(Boolean),
+      placeholder: placeholder.trim() || undefined,
+      required,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...templates, template];
+    setTemplates(updated);
+    saveCustomTemplates(userId, updated);
+  };
+
+  const loadTemplate = (template) => {
+    const question = {
+      id: `custom_${Date.now()}`,
+      label: template.label,
+      type: template.type,
+      options: template.options,
+      placeholder: template.placeholder,
+      required: template.required,
+      custom: true,
+    };
+    setCustomQuestions([...customQuestions, question]);
+    toast.success(`Added "${template.label}" from template`);
+  };
+
+  const deleteTemplate = (templateId) => {
+    const updated = templates.filter(t => t.id !== templateId);
+    setTemplates(updated);
+    saveCustomTemplates(userId, updated);
+    toast.success("Template deleted");
+  };
+
+  const removeCustomQuestion = (questionId) => {
+    setCustomQuestions(customQuestions.filter(q => q.id !== questionId));
+    const newAnswers = { ...answers };
+    delete newAnswers[questionId];
+    setAnswers(newAnswers);
   };
 
   const renderQuestion = (question) => {
@@ -893,6 +1203,15 @@ export function SmartNicheBrief({ nicheSlug, value, onChange }) {
             type="date"
             value={currentValue || ''}
             onChange={(e) => updateAnswer(question.id, e.target.value)}
+            className="w-full"
+          />
+        );
+      case 'budget':
+        return (
+          <BudgetField
+            value={currentValue}
+            onChange={(val) => updateAnswer(question.id, val)}
+            placeholder={question.placeholder}
           />
         );
       case 'structured':
@@ -924,16 +1243,27 @@ export function SmartNicheBrief({ nicheSlug, value, onChange }) {
 
   return (
     <div className="space-y-8">
-      {nicheConfig.questions.map((question, index) => (
+      {allQuestions.map((question, index) => (
         <div key={question.id} className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
               {index + 1}
             </span>
-            <Label className="text-sm font-semibold">
-              {question.label}
-              {question.required && <span className="text-red-500 ml-1">*</span>}
-            </Label>
+            <div className="flex-1 flex items-center gap-2">
+              <Label className="text-sm font-semibold">
+                {question.label}
+                {question.required && <span className="text-red-500 ml-1">*</span>}
+              </Label>
+              {question.custom && (
+                <button
+                  onClick={() => removeCustomQuestion(question.id)}
+                  className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
+                  title="Remove custom question"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
           {question.description && (
             <p className="text-xs text-muted-foreground ml-8">{question.description}</p>
@@ -943,6 +1273,16 @@ export function SmartNicheBrief({ nicheSlug, value, onChange }) {
           </div>
         </div>
       ))}
+
+      <div className="ml-8 pt-4 border-t">
+        <CustomQuestionBuilder
+          onAdd={addCustomQuestion}
+          onSaveTemplate={saveTemplate}
+          onLoadTemplate={loadTemplate}
+          templates={templates}
+          onDeleteTemplate={deleteTemplate}
+        />
+      </div>
     </div>
   );
 }
