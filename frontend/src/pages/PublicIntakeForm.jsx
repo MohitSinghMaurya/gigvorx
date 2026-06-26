@@ -1,293 +1,267 @@
-import { useState, useEffect, useRef, createRef } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { findNiche, NICHES } from "@/lib/niches";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { BrandLogoLarge } from "@/components/Brand";
-import { toast } from "sonner";
 import {
-  Send, CheckCircle2, Loader2, Sparkles, FileText,
-  Upload, X, AlertCircle, Mail, Phone, Building2,
-  Type, FileUp, Link as LinkIcon, Video, Image, List, ExternalLink, AlignJustify
+  Upload, Image, Link, Video, CheckCircle2, Loader2, Send,
+  FileText, Type, List, AlertCircle, X, FileCheck
 } from "lucide-react";
 
-async function uploadFile(file, bucket = "gigvorx-attachments") {
-  if (!file) return null;
-  const ext = file.name.split(".").pop();
-  const path = `public-intake/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-  });
-  if (error) throw error;
-  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-  return urlData.publicUrl;
-}
+const questionTypeIcons = {
+  text: Type,
+  long: FileText,
+  select: List,
+  file: Upload,
+  image: Image,
+  link: Link,
+  video: Video,
+};
 
-const QUESTION_TYPES = {
-  text: { label: "Short Answer", icon: Type, placeholder: "Type your answer..." },
-  long: { label: "Long Answer", icon: AlignJustify, placeholder: "Type a detailed answer..." },
-  select: { label: "Multiple Choice", icon: List, placeholder: "Select an option..." },
-  file: { label: "File Upload", icon: FileUp, placeholder: "Upload files..." },
-  image: { label: "Image Upload", icon: Image, placeholder: "Upload images..." },
-  link: { label: "URL / Link", icon: LinkIcon, placeholder: "Paste a URL..." },
-  video: { label: "Video Link", icon: Video, placeholder: "Paste a video URL..." },
+const questionTypeLabels = {
+  text: "Short Answer",
+  long: "Long Answer",
+  select: "Multiple Choice",
+  file: "File Upload",
+  image: "Image Upload",
+  link: "URL / Link",
+  video: "Video Link",
 };
 
 export default function PublicIntakeForm() {
   const { shareToken } = useParams();
-  const [searchParams] = useSearchParams();
+  const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
-  const [briefConfig, setBriefConfig] = useState(null);
-  const [ownerProfile, setOwnerProfile] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState(0);
+
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [clientCompany, setClientCompany] = useState("");
+
   const [answers, setAnswers] = useState({});
   const [files, setFiles] = useState({});
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState({});
+  const [filePreviews, setFilePreviews] = useState({});
 
-  // Use refs for file inputs
+  // Use a map of refs for each question's file input
   const fileInputRefs = useRef({});
 
   useEffect(() => {
-    async function loadSharedBrief() {
-      try {
-        setLoading(true);
-        const { data: briefData, error: briefError } = await supabase
-          .from("briefs")
-          .select("*, owner:user_id(id, name, email, business_name, logo)")
-          .eq("share_token", shareToken)
-          .eq("status", "sent")
-          .single();
+    fetchBrief();
+  }, [shareToken]);
 
-        if (briefError || !briefData) {
-          const nicheSlug = searchParams.get("niche") || "web-design";
-          const niche = findNiche(nicheSlug);
-          setBriefConfig({
-            type: "niche",
-            niche: niche.slug,
-            title: `${niche.name} Project Brief`,
-            description: `Fill out this brief to help us understand your ${niche.name.toLowerCase()} project needs.`,
-            questions: niche.questions.map((q, i) => {
-              if (typeof q === "string") {
-                return { id: `q-${i}`, text: q, type: "long" };
-              }
-              return { id: `q-${i}`, text: q.text || q.q, type: q.type || "long", options: q.options };
-            }),
-            owner: { name: "GigVorx Freelancer", email: "gigvorx@gmail.com" },
-            allowFileUpload: true,
-            maxFiles: 3,
-          });
-          setOwnerProfile({ name: "GigVorx Freelancer", business_name: "GigVorx" });
-        } else {
-          setBriefConfig({
-            type: "shared",
-            briefId: briefData.id,
-            userId: briefData.user_id,
-            niche: briefData.niche,
-            title: briefData.title,
-            description: briefData.sections?.overview?.replace(/^#.*\n/m, "") || "Please fill out this project brief.",
-            questions: briefData.questions?.map((q, i) => ({
-              id: q.id || `q-${i}`,
-              text: q.q,
-              type: q.type || "long",
-              options: q.options,
-            })) || [],
-            owner: briefData.owner,
-            allowFileUpload: true,
-            maxFiles: 5,
-          });
-          setOwnerProfile(briefData.owner);
-        }
-      } catch (err) {
-        console.error("Failed to load shared brief:", err);
-        setError("This link appears to be invalid or expired.");
-      } finally {
-        setLoading(false);
+  useEffect(() => {
+    if (!brief) return;
+    const total = brief.questions?.length || 0;
+    if (total === 0) { setProgress(0); return; }
+    let filled = 0;
+    brief.questions.forEach(q => {
+      if (q.type === "file" || q.type === "image") {
+        if (files[q.id]?.length > 0 || filePreviews[q.id]?.length > 0) filled++;
+      } else {
+        if (answers[q.id]?.trim?.()) filled++;
       }
-    }
-    if (shareToken) loadSharedBrief();
-  }, [shareToken, searchParams]);
+    });
+    setProgress(Math.round((filled / total) * 100));
+  }, [answers, files, filePreviews, brief]);
 
-  const updateAnswer = (questionId, value) => {
+  const fetchBrief = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("briefs")
+        .select("*")
+        .eq("share_token", shareToken)
+        .eq("share_enabled", true)
+        .single();
+
+      if (error || !data) {
+        setError("This intake form link is invalid or has been disabled.");
+        return;
+      }
+      setBrief(data);
+      if (data.clientEmail) setClientEmail(data.clientEmail);
+      if (data.clientName) setClientName(data.clientName);
+    } catch (err) {
+      setError("Something went wrong. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnswerChange = (questionId, value) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
-  const handleFileChange = (questionId, e) => {
-    const selectedFiles = Array.from(e.target.files);
-    if (selectedFiles.length === 0) return;
-    setFiles(prev => ({
-      ...prev,
-      [questionId]: [...(prev[questionId] || []), ...selectedFiles]
-    }));
-  };
+  const handleFileSelect = async (questionId, event) => {
+    const selectedFiles = Array.from(event.target.files);
+    if (!selectedFiles.length) return;
 
-  const removeFile = (questionId, index) => {
-    setFiles(prev => ({
-      ...prev,
-      [questionId]: prev[questionId]?.filter((_, i) => i !== index) || []
-    }));
-  };
+    setFiles(prev => ({ ...prev, [questionId]: [...(prev[questionId] || []), ...selectedFiles] }));
 
-  const triggerFileInput = (questionId) => {
-    const inputRef = fileInputRefs.current[questionId];
-    if (inputRef) {
-      inputRef.click();
+    const previews = selectedFiles.map(file => ({
+      name: file.name,
+      url: URL.createObjectURL(file),
+      type: file.type,
+    }));
+    setFilePreviews(prev => ({ ...prev, [questionId]: [...(prev[questionId] || []), ...previews] }));
+
+    // Reset the input so the same file can be selected again
+    if (fileInputRefs.current[questionId]) {
+      fileInputRefs.current[questionId].value = "";
     }
   };
 
-  const completionPercent = () => {
-    if (!briefConfig) return 0;
-    const totalQuestions = briefConfig.questions.length;
-    if (totalQuestions === 0) return 0;
-    let answered = 0;
-    briefConfig.questions.forEach(q => {
-      const type = q.type || "long";
-      if (type === "text" || type === "long" || type === "link" || type === "video") {
-        if (answers[q.id]?.trim()) answered++;
-      } else if (type === "select") {
-        if (answers[q.id]) answered++;
-      } else if (type === "file" || type === "image") {
-        if (files[q.id]?.length > 0) answered++;
-      }
+  const handleRemoveFile = (questionId, fileIndex) => {
+    setFiles(prev => {
+      const updated = [...(prev[questionId] || [])];
+      updated.splice(fileIndex, 1);
+      return { ...prev, [questionId]: updated };
     });
-    const hasContact = clientName && clientEmail;
-    return Math.round(((answered + (hasContact ? 1 : 0)) / (totalQuestions + 1)) * 100);
+    setFilePreviews(prev => {
+      const updated = [...(prev[questionId] || [])];
+      if (updated[fileIndex]?.url) URL.revokeObjectURL(updated[fileIndex].url);
+      updated.splice(fileIndex, 1);
+      return { ...prev, [questionId]: updated };
+    });
+  };
+
+  const uploadFilesToSupabase = async (questionId, fileList) => {
+    if (!fileList?.length) return [];
+    setUploading(prev => ({ ...prev, [questionId]: true }));
+    const uploaded = [];
+
+    for (const file of fileList) {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${shareToken}/${questionId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+      try {
+        const { error: upError } = await supabase.storage
+          .from("gigvorx-attachments")
+          .upload(fileName, file, { upsert: false });
+        if (upError) throw upError;
+
+        const { data: urlData } = supabase.storage
+          .from("gigvorx-attachments")
+          .getPublicUrl(fileName);
+        uploaded.push({ name: file.name, url: urlData.publicUrl, type: file.type });
+      } catch (err) {
+        console.error("Upload error:", err);
+      }
+    }
+
+    setUploading(prev => ({ ...prev, [questionId]: false }));
+    return uploaded;
   };
 
   const handleSubmit = async () => {
     if (!clientName.trim() || !clientEmail.trim()) {
-      toast.error("Please provide your name and email");
+      alert("Please enter your name and email.");
       return;
     }
+
+    setSubmitting(true);
+
     try {
-      setSubmitting(true);
-      setUploadProgress(10);
-
-      const uploadedFiles = {};
-      const allFileEntries = Object.entries(files);
-      let uploadedCount = 0;
-      const totalFiles = allFileEntries.reduce((sum, [, fileList]) => sum + fileList.length, 0);
-
-      for (const [questionId, fileList] of allFileEntries) {
-        uploadedFiles[questionId] = [];
-        for (const file of fileList) {
-          const url = await uploadFile(file);
-          if (url) uploadedFiles[questionId].push({ name: file.name, url });
-          uploadedCount++;
-          setUploadProgress(10 + Math.round((uploadedCount / totalFiles) * 40));
+      const fileAnswers = {};
+      for (const q of brief.questions || []) {
+        if ((q.type === "file" || q.type === "image") && files[q.id]?.length > 0) {
+          const uploaded = await uploadFilesToSupabase(q.id, files[q.id]);
+          fileAnswers[q.id] = uploaded;
         }
       }
 
-      setUploadProgress(55);
+      const finalAnswers = { ...answers };
+      Object.entries(fileAnswers).forEach(([qid, uploads]) => {
+        finalAnswers[qid] = JSON.stringify(uploads);
+      });
+
       const { data: existingClient } = await supabase
         .from("clients")
         .select("id")
-        .eq("user_id", briefConfig.userId)
-        .eq("email", clientEmail.toLowerCase())
+        .eq("email", clientEmail.trim())
+        .eq("user_id", brief.user_id)
         .maybeSingle();
+
       let clientId = existingClient?.id;
+
       if (!clientId) {
-        const { data: newClient, error: clientError } = await supabase
+        const { data: newClient } = await supabase
           .from("clients")
           .insert({
-            user_id: briefConfig.userId,
-            name: clientName,
-            email: clientEmail.toLowerCase(),
-            phone: clientPhone,
-            company: clientCompany,
-            is_lead: true,
-            lead_source: "public_form",
-            status: "new_lead",
-            created_at: new Date().toISOString(),
+            name: clientName.trim(),
+            email: clientEmail.trim(),
+            phone: clientPhone.trim() || null,
+            user_id: brief.user_id,
+            source: "public_intake",
+            status: "lead",
           })
-          .select()
+          .select("id")
           .single();
-        if (clientError) throw clientError;
-        clientId = newClient.id;
+        clientId = newClient?.id;
       }
-      setUploadProgress(75);
 
-      const questionsWithAnswers = briefConfig.questions.map(q => {
-        let answer = answers[q.id] || "";
-        if ((q.type === "file" || q.type === "image") && uploadedFiles[q.id]) {
-          answer = JSON.stringify(uploadedFiles[q.id]);
-        }
-        return {
-          id: q.id,
-          q: q.text,
-          a: answer,
-          type: q.type || "long",
-        };
+      await supabase.from("brief_responses").insert({
+        brief_id: brief.id,
+        client_id: clientId,
+        client_name: clientName.trim(),
+        client_email: clientEmail.trim(),
+        client_phone: clientPhone.trim() || null,
+        answers: finalAnswers,
+        share_token: shareToken,
       });
 
-      const responsePayload = {
-        user_id: briefConfig.userId,
-        client_id: clientId,
-        client_name: clientName,
-        client_email: clientEmail,
-        title: briefConfig.title,
-        niche: briefConfig.niche,
-        status: "draft",
-        source: "public_intake",
-        share_token: shareToken,
-        questions: questionsWithAnswers,
-        sections: {
-          overview: `# Project Overview\n\nSubmitted by ${clientName} (${clientEmail}) via public intake form.`,
-          clientDetails: `# Client Details\n\nName: ${clientName}\nEmail: ${clientEmail}\nPhone: ${clientPhone || "—"}\nCompany: ${clientCompany || "—"}`,
-          requirements: `# Requirements\n\n${briefConfig.questions.map(q => `**${q.text}** [${QUESTION_TYPES[q.type]?.label || "Text"}]\n${answers[q.id] || (files[q.id]?.length > 0 ? `${files[q.id].length} file(s) uploaded` : "Not answered")}\n`).join("\n")}`,
-          timeline: "# Timeline\n\nTo be discussed.",
-          budget: "# Budget\n\nTo be discussed.",
-          deliverables: "# Deliverables\n\nTo be defined.",
-          notes: `# Notes\n\nSubmitted via public form.`,
-        },
-        attachments: Object.values(uploadedFiles).flat(),
-        confirmation: false,
-        created_at: new Date().toISOString(),
-      };
-      const { error: briefError } = await supabase.from("briefs").insert(responsePayload);
-      if (briefError) throw briefError;
-      setUploadProgress(100);
+      await supabase
+        .from("briefs")
+        .update({ status: "sent", clientName: clientName.trim(), clientEmail: clientEmail.trim() })
+        .eq("id", brief.id);
+
+      await supabase.from("analytics_events").insert({
+        user_id: brief.user_id,
+        event_type: "public_intake_submit",
+        metadata: { brief_id: brief.id, share_token: shareToken },
+      });
+
       setSubmitted(true);
-      toast.success("Brief submitted successfully!");
     } catch (err) {
-      console.error("Submit failed:", err);
-      toast.error(err.message || "Failed to submit. Please try again.");
+      console.error("Submit error:", err);
+      alert("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const triggerFileInput = (questionId) => {
+    const input = fileInputRefs.current[questionId];
+    if (input) {
+      input.click();
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary mb-3" />
-          <p className="text-muted-foreground">Loading your brief...</p>
-        </div>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#FF6B00] animate-spin" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 px-4">
-        <Card className="max-w-md w-full p-8 text-center">
-          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Link Not Found</h2>
-          <p className="text-muted-foreground mb-6">{error}</p>
-          <p className="text-sm text-muted-foreground">Powered by <span className="font-semibold text-foreground">GigVorx</span></p>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">
+        <Card className="bg-[#111] border-white/10 max-w-md w-full">
+          <CardContent className="pt-6 text-center">
+            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-2">Link Not Available</h2>
+            <p className="text-white/60">{error}</p>
+          </CardContent>
         </Card>
       </div>
     );
@@ -295,196 +269,195 @@ export default function PublicIntakeForm() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-12">
-        <div className="max-w-lg mx-auto">
-          <Card className="p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Brief Submitted!</h2>
-            <p className="text-muted-foreground mb-2">Thank you, <span className="font-semibold text-foreground">{clientName}</span>.</p>
-            <p className="text-muted-foreground mb-6">{ownerProfile?.business_name || ownerProfile?.name || "The freelancer"} has received your brief and will get back to you shortly.</p>
-            <div className="bg-muted/50 rounded-lg p-4 text-sm text-left space-y-2">
-              <p><span className="font-medium">Reference:</span> #{shareToken?.slice(0, 8).toUpperCase()}</p>
-              <p><span className="font-medium">Email:</span> {clientEmail}</p>
-              <p><span className="font-medium">Project:</span> {briefConfig?.title}</p>
-            </div>
-            <p className="text-xs text-muted-foreground mt-6">Powered by <span className="font-semibold">GigVorx</span> — Professional client intake for freelancers</p>
-          </Card>
-        </div>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">
+        <Card className="bg-[#111] border-white/10 max-w-md w-full">
+          <CardContent className="pt-6 text-center">
+            <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-2">Thank You!</h2>
+            <p className="text-white/60 mb-4">Your response has been submitted successfully. We will get back to you soon.</p>
+            <p className="text-white/40 text-sm">Submitted by: {clientName} ({clientEmail})</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  const niche = findNiche(briefConfig?.niche || "web-design");
-  const pct = completionPercent();
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BrandLogoLarge size={36} />
-            <div>
-              <p className="font-bold text-sm leading-tight">{ownerProfile?.business_name || ownerProfile?.name || "GigVorx"}</p>
-              <p className="text-[10px] text-muted-foreground">Client Intake Form</p>
+    <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
+      {/* Header */}
+      <div className="border-b border-white/10 bg-[#111]">
+        <div className="max-w-2xl mx-auto px-4 py-6">
+          <Badge className="bg-[#FF6B00]/20 text-[#FF6B00] border-[#FF6B00]/30 mb-3">Client Intake Form</Badge>
+          <h1 className="text-2xl font-bold text-white mb-2">{brief?.projectTitle || "Project Brief"}</h1>
+          {brief?.description && <p className="text-white/60 text-sm">{brief.description}</p>}
+          <div className="mt-4">
+            <div className="flex justify-between text-xs text-white/40 mb-1">
+              <span>Progress</span>
+              <span>{progress}%</span>
             </div>
+            <Progress value={progress} className="h-2 bg-white/10" />
           </div>
-          <Badge variant="outline" className="text-xs"><Sparkles className="w-3 h-3 mr-1" />{niche.name}</Badge>
         </div>
-      </header>
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <div className="flex justify-between text-xs text-muted-foreground mb-2">
-            <span>Form completion</span>
-            <span className="font-medium">{pct}%</span>
-          </div>
-          <Progress value={pct} className="h-2" />
-        </div>
-        <Card className="overflow-hidden">
-          <div className={`h-1.5 bg-gradient-to-r ${niche.accent}`} />
-          <div className="p-6 md:p-8">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{briefConfig?.title}</h1>
-            <p className="text-muted-foreground mb-8">{briefConfig?.description}</p>
+      </div>
 
-            {/* Contact Info */}
-            <div className="space-y-4 mb-8">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Your Contact Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> Full Name *</Label>
-                  <Input 
-                    value={clientName} 
-                    onChange={(e) => setClientName(e.target.value)} 
-                    placeholder="John Doe" 
-                    className="mt-1.5" 
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email *</Label>
-                  <Input 
-                    type="email" 
-                    value={clientEmail} 
-                    onChange={(e) => setClientEmail(e.target.value)} 
-                    placeholder="john@company.com" 
-                    className="mt-1.5" 
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</Label>
-                  <Input 
-                    value={clientPhone} 
-                    onChange={(e) => setClientPhone(e.target.value)} 
-                    placeholder="+91 98765 43210" 
-                    className="mt-1.5" 
-                  />
-                </div>
-                <div>
-                  <Label>Company</Label>
-                  <Input 
-                    value={clientCompany} 
-                    onChange={(e) => setClientCompany(e.target.value)} 
-                    placeholder="Acme Inc." 
-                    className="mt-1.5" 
-                  />
-                </div>
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Contact Info */}
+        <Card className="bg-[#111] border-white/10">
+          <CardContent className="pt-6 space-y-4">
+            <h3 className="text-white font-semibold flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-[#FF6B00] text-white text-xs flex items-center justify-center font-bold">1</span>
+              Your Contact Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-white/80">Full Name *</Label>
+                <Input
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="John Doe"
+                  className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white/80">Email *</Label>
+                <Input
+                  type="email"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="john@example.com"
+                  className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-white/80">Phone (optional)</Label>
+                <Input
+                  type="tel"
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
+                />
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Project Questions */}
-            <div className="space-y-6 mb-8">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Project Questions</h3>
-              {briefConfig?.questions.map((q, i) => {
-                const typeConfig = QUESTION_TYPES[q.type] || QUESTION_TYPES.long;
-                const TypeIcon = typeConfig.icon;
-                const qType = q.type || "long";
+        {/* Questions */}
+        <div className="space-y-4">
+          <h3 className="text-white font-semibold flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-[#FF6B00] text-white text-xs flex items-center justify-center font-bold">2</span>
+            Project Questions
+          </h3>
 
-                return (
-                  <div key={q.id} className="space-y-2">
-                    <Label className="text-sm font-medium leading-relaxed flex items-center gap-2">
-                      <span className="text-muted-foreground mr-1">{i + 1}.</span>
-                      {q.text}
-                      <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 h-5">
-                        <TypeIcon className="w-3 h-3 mr-0.5" />
-                        {typeConfig.label}
-                      </Badge>
-                    </Label>
+          {(brief?.questions || []).map((q, index) => {
+            const Icon = questionTypeIcons[q.type] || Type;
+            const answer = answers[q.id] || "";
+            const qFiles = files[q.id] || [];
+            const qPreviews = filePreviews[q.id] || [];
+            const isUploading = uploading[q.id];
 
-                    {/* SHORT ANSWER */}
-                    {qType === "text" && (
+            return (
+              <Card key={q.id} className="bg-[#111] border-white/10">
+                <CardContent className="pt-5 pb-5 space-y-3">
+                  {/* Question Header */}
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#FF6B00] font-bold text-sm mt-0.5">{index + 1}.</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="border-white/10 text-white/50 text-[10px] px-1.5 py-0">
+                          <Icon className="w-3 h-3 mr-1" />
+                          {questionTypeLabels[q.type] || q.type}
+                        </Badge>
+                      </div>
+                      <p className="text-white font-medium">{q.text || "Untitled Question"}</p>
+                    </div>
+                  </div>
+
+                  {/* Answer Input Based on Type */}
+                  <div className="pl-5">
+                    {/* TEXT */}
+                    {q.type === "text" && (
                       <Input
-                        value={answers[q.id] || ""}
-                        onChange={(e) => updateAnswer(q.id, e.target.value)}
-                        placeholder={typeConfig.placeholder}
+                        value={answer}
+                        onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                        placeholder="Type your answer..."
+                        className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
                       />
                     )}
 
-                    {/* LONG ANSWER */}
-                    {qType === "long" && (
+                    {/* LONG */}
+                    {q.type === "long" && (
                       <Textarea
-                        value={answers[q.id] || ""}
-                        onChange={(e) => updateAnswer(q.id, e.target.value)}
-                        placeholder={typeConfig.placeholder}
+                        value={answer}
+                        onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                        placeholder="Type your detailed answer..."
                         rows={4}
-                        className="resize-y"
+                        className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 resize-none"
                       />
                     )}
 
-                    {/* MULTIPLE CHOICE */}
-                    {qType === "select" && (
+                    {/* SELECT */}
+                    {q.type === "select" && (
                       <div className="space-y-2">
-                        {(q.options || []).map((opt, idx) => (
-                          <label key={idx} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/30 transition-colors">
+                        {(q.options || []).map((opt, oIndex) => (
+                          <label
+                            key={oIndex}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                              answer === opt
+                                ? "border-[#FF6B00] bg-[#FF6B00]/10"
+                                : "border-white/10 bg-[#1a1a1a] hover:border-white/20"
+                            }`}
+                          >
                             <input
                               type="radio"
                               name={`question-${q.id}`}
                               value={opt}
-                              checked={answers[q.id] === opt}
-                              onChange={(e) => updateAnswer(q.id, e.target.value)}
-                              className="w-4 h-4 accent-foreground"
+                              checked={answer === opt}
+                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                              className="w-4 h-4 accent-[#FF6B00]"
                             />
-                            <span className="text-sm">{opt}</span>
+                            <span className="text-white text-sm">{opt}</span>
                           </label>
                         ))}
-                        {(!q.options || q.options.length === 0) && (
-                          <p className="text-sm text-muted-foreground">No options available for this question.</p>
-                        )}
                       </div>
                     )}
 
                     {/* FILE UPLOAD */}
-                    {qType === "file" && (
-                      <div className="space-y-2">
+                    {q.type === "file" && (
+                      <div className="space-y-3">
                         <button
                           type="button"
-                          className="w-full border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors"
                           onClick={() => triggerFileInput(q.id)}
+                          className="w-full h-20 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-[#FF6B00]/50 hover:bg-[#FF6B00]/5 transition-all cursor-pointer"
                         >
-                          <FileUp className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm font-medium">Click to upload files</p>
-                          <p className="text-xs text-muted-foreground mt-1">PDF, DOC, ZIP up to 10MB each</p>
+                          {isUploading ? (
+                            <Loader2 className="w-5 h-5 text-[#FF6B00] animate-spin" />
+                          ) : (
+                            <>
+                              <Upload className="w-5 h-5 text-white/30" />
+                              <span className="text-white/30 text-sm">Click to upload files (PDF, DOC, ZIP)</span>
+                            </>
+                          )}
                         </button>
                         <input
+                          ref={el => { fileInputRefs.current[q.id] = el; }}
                           type="file"
                           multiple
-                          ref={el => { fileInputRefs.current[q.id] = el; }}
-                          onChange={(e) => handleFileChange(q.id, e)}
-                          accept=".pdf,.doc,.docx,.zip,.txt"
-                          className="sr-only"
-                          tabIndex={-1}
+                          accept=".pdf,.doc,.docx,.zip,.txt,.xls,.xlsx,.ppt,.pptx"
+                          onChange={(e) => handleFileSelect(q.id, e)}
+                          style={{ display: "none" }}
                         />
-                        {files[q.id]?.length > 0 && (
-                          <div className="space-y-1.5">
-                            {files[q.id].map((file, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg text-sm">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                                  <span className="truncate">{file.name}</span>
-                                  <span className="text-xs text-muted-foreground shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
-                                </div>
-                                <button type="button" onClick={() => removeFile(q.id, idx)} className="text-muted-foreground hover:text-destructive shrink-0">
+                        {qPreviews.length > 0 && (
+                          <div className="space-y-2">
+                            {qPreviews.map((file, fIndex) => (
+                              <div key={fIndex} className="flex items-center gap-2 p-2 rounded-lg bg-[#1a1a1a] border border-white/10">
+                                <FileCheck className="w-4 h-4 text-[#FF6B00]" />
+                                <span className="text-white text-sm flex-1 truncate">{file.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFile(q.id, fIndex)}
+                                  className="text-white/30 hover:text-red-400 p-1"
+                                >
                                   <X className="w-4 h-4" />
                                 </button>
                               </div>
@@ -495,37 +468,45 @@ export default function PublicIntakeForm() {
                     )}
 
                     {/* IMAGE UPLOAD */}
-                    {qType === "image" && (
-                      <div className="space-y-2">
+                    {q.type === "image" && (
+                      <div className="space-y-3">
                         <button
                           type="button"
-                          className="w-full border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors"
                           onClick={() => triggerFileInput(q.id)}
+                          className="w-full h-20 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-[#FF6B00]/50 hover:bg-[#FF6B00]/5 transition-all cursor-pointer"
                         >
-                          <Image className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm font-medium">Click to upload images</p>
-                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF, WEBP up to 10MB each</p>
+                          {isUploading ? (
+                            <Loader2 className="w-5 h-5 text-[#FF6B00] animate-spin" />
+                          ) : (
+                            <>
+                              <Image className="w-5 h-5 text-white/30" />
+                              <span className="text-white/30 text-sm">Click to upload images (PNG, JPG, GIF)</span>
+                            </>
+                          )}
                         </button>
                         <input
+                          ref={el => { fileInputRefs.current[q.id] = el; }}
                           type="file"
                           multiple
-                          ref={el => { fileInputRefs.current[q.id] = el; }}
-                          onChange={(e) => handleFileChange(q.id, e)}
-                          accept="image/*"
-                          className="sr-only"
-                          tabIndex={-1}
+                          accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                          onChange={(e) => handleFileSelect(q.id, e)}
+                          style={{ display: "none" }}
                         />
-                        {files[q.id]?.length > 0 && (
+                        {qPreviews.length > 0 && (
                           <div className="grid grid-cols-3 gap-2">
-                            {files[q.id].map((file, idx) => (
-                              <div key={idx} className="relative group">
-                                <div className="aspect-square rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
-                                  <Image className="w-6 h-6" />
-                                </div>
-                                <p className="text-[10px] truncate mt-1">{file.name}</p>
-                                <button type="button" onClick={() => removeFile(q.id, idx)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {qPreviews.map((file, fIndex) => (
+                              <div key={fIndex} className="relative group aspect-square rounded-lg overflow-hidden border border-white/10">
+                                <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFile(q.id, fIndex)}
+                                  className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
                                   <X className="w-3 h-3" />
                                 </button>
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
+                                  <span className="text-white text-[10px] truncate block">{file.name}</span>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -534,64 +515,89 @@ export default function PublicIntakeForm() {
                     )}
 
                     {/* LINK */}
-                    {qType === "link" && (
+                    {q.type === "link" && (
                       <div className="space-y-2">
-                        <Input
-                          value={answers[q.id] || ""}
-                          onChange={(e) => updateAnswer(q.id, e.target.value)}
-                          placeholder={typeConfig.placeholder}
-                        />
-                        {answers[q.id] && (
-                          <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                            <ExternalLink className="w-3 h-3" />Open link
-                          </a>
-                        )}
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                            <Input
+                              value={answer}
+                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                              placeholder="https://example.com"
+                              className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 pl-10"
+                            />
+                          </div>
+                          {answer && (
+                            <a
+                              href={answer}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-2 rounded-md bg-[#FF6B00]/20 text-[#FF6B00] text-sm hover:bg-[#FF6B00]/30 transition-colors flex items-center gap-1"
+                            >
+                              <Link className="w-3.5 h-3.5" />Open
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
 
                     {/* VIDEO */}
-                    {qType === "video" && (
+                    {q.type === "video" && (
                       <div className="space-y-2">
-                        <Input
-                          value={answers[q.id] || ""}
-                          onChange={(e) => updateAnswer(q.id, e.target.value)}
-                          placeholder={typeConfig.placeholder}
-                        />
-                        {answers[q.id] && (
-                          <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                            <Video className="w-3 h-3" />Watch video
-                          </a>
-                        )}
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <Video className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                            <Input
+                              value={answer}
+                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                              placeholder="https://youtube.com/... or https://vimeo.com/..."
+                              className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 pl-10"
+                            />
+                          </div>
+                          {answer && (
+                            <a
+                              href={answer}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-2 rounded-md bg-[#FF6B00]/20 text-[#FF6B00] text-sm hover:bg-[#FF6B00]/30 transition-colors flex items-center gap-1"
+                            >
+                              <Video className="w-3.5 h-3.5" />Watch
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
-            {/* Submit */}
-            <div className="pt-6 border-t">
-              {submitting && (
-                <div className="mb-4">
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1"><span>Uploading...</span><span>{uploadProgress}%</span></div>
-                  <Progress value={uploadProgress} className="h-1.5" />
-                </div>
-              )}
-              <Button onClick={handleSubmit} disabled={submitting || !clientName || !clientEmail} className="w-full bg-brand-gradient text-white hover:opacity-90 h-12 text-base font-semibold shadow-sm shadow-blue-500/20">
-                {submitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting...</> : <><Send className="w-4 h-4 mr-2" />Submit Brief</>}
-              </Button>
-              <p className="text-xs text-center text-muted-foreground mt-3">
-                Your information is secure and will only be shared with <span className="font-medium">{ownerProfile?.business_name || ownerProfile?.name || "the freelancer"}</span>.
-              </p>
-            </div>
-          </div>
-        </Card>
-        <div className="text-center mt-8 pb-8">
-          <p className="text-xs text-muted-foreground">
-            Powered by <a href="https://gigvorx.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-foreground hover:underline">GigVorx</a> — Professional client intake for freelancers
+        {/* Submit */}
+        <div className="pt-4">
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white h-12 text-lg font-semibold"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              <>
+                <Send className="w-5 h-5 mr-2" />
+                Submit Response
+              </>
+            )}
+          </Button>
+          <p className="text-center text-white/30 text-xs mt-3">
+            Powered by GigVorx · Your information is secure and confidential
           </p>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,9 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { useCollection } from "@/lib/useCollection";
-import { findNiche, NICHES } from "@/lib/niches";
-import { whatsappShare, formatDate } from "@/lib/format";
+Share, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
