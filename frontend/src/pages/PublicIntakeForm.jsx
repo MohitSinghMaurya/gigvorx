@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { supabase } from "../lib/supabase";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
+import { Label } from "../components/ui/label";
+import { Badge } from "../components/ui/badge";
+import { Card, CardContent } from "../components/ui/card";
+import { Progress } from "../components/ui/progress";
 import {
   Upload, Image, Link, Video, CheckCircle2, Loader2, Send,
   FileText, Type, List, AlertCircle, X, FileCheck
@@ -51,7 +51,6 @@ export default function PublicIntakeForm() {
   const [uploading, setUploading] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
 
-  // Use a map of refs for each question's file input
   const fileInputRefs = useRef({});
 
   useEffect(() => {
@@ -114,7 +113,6 @@ export default function PublicIntakeForm() {
     }));
     setFilePreviews(prev => ({ ...prev, [questionId]: [...(prev[questionId] || []), ...previews] }));
 
-    // Reset the input so the same file can be selected again
     if (fileInputRefs.current[questionId]) {
       fileInputRefs.current[questionId].value = "";
     }
@@ -284,7 +282,6 @@ export default function PublicIntakeForm() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
-      {/* Header */}
       <div className="border-b border-white/10 bg-[#111]">
         <div className="max-w-2xl mx-auto px-4 py-6">
           <Badge className="bg-[#FF6B00]/20 text-[#FF6B00] border-[#FF6B00]/30 mb-3">Client Intake Form</Badge>
@@ -301,7 +298,6 @@ export default function PublicIntakeForm() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* Contact Info */}
         <Card className="bg-[#111] border-white/10">
           <CardContent className="pt-6 space-y-4">
             <h3 className="text-white font-semibold flex items-center gap-2">
@@ -342,7 +338,6 @@ export default function PublicIntakeForm() {
           </CardContent>
         </Card>
 
-        {/* Questions */}
         <div className="space-y-4">
           <h3 className="text-white font-semibold flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-[#FF6B00] text-white text-xs flex items-center justify-center font-bold">2</span>
@@ -359,7 +354,6 @@ export default function PublicIntakeForm() {
             return (
               <Card key={q.id} className="bg-[#111] border-white/10">
                 <CardContent className="pt-5 pb-5 space-y-3">
-                  {/* Question Header */}
                   <div className="flex items-start gap-2">
                     <span className="text-[#FF6B00] font-bold text-sm mt-0.5">{index + 1}.</span>
                     <div className="flex-1">
@@ -373,9 +367,7 @@ export default function PublicIntakeForm() {
                     </div>
                   </div>
 
-                  {/* Answer Input Based on Type */}
                   <div className="pl-5">
-                    {/* TEXT */}
                     {q.type === "text" && (
                       <Input
                         value={answer}
@@ -385,7 +377,6 @@ export default function PublicIntakeForm() {
                       />
                     )}
 
-                    {/* LONG */}
                     {q.type === "long" && (
                       <Textarea
                         value={answer}
@@ -396,7 +387,6 @@ export default function PublicIntakeForm() {
                       />
                     )}
 
-                    {/* SELECT */}
                     {q.type === "select" && (
                       <div className="space-y-2">
                         {(q.options || []).map((opt, oIndex) => (
@@ -422,7 +412,6 @@ export default function PublicIntakeForm() {
                       </div>
                     )}
 
-                    {/* FILE UPLOAD */}
                     {q.type === "file" && (
                       <div className="space-y-3">
                         <button
@@ -467,7 +456,6 @@ export default function PublicIntakeForm() {
                       </div>
                     )}
 
-                    {/* IMAGE UPLOAD */}
                     {q.type === "image" && (
                       <div className="space-y-3">
                         <button
@@ -514,7 +502,6 @@ export default function PublicIntakeForm() {
                       </div>
                     )}
 
-                    {/* LINK */}
                     {q.type === "link" && (
                       <div className="space-y-2">
                         <div className="flex gap-2">
@@ -541,7 +528,6 @@ export default function PublicIntakeForm() {
                       </div>
                     )}
 
-                    {/* VIDEO */}
                     {q.type === "video" && (
                       <div className="space-y-2">
                         <div className="flex gap-2">
@@ -574,7 +560,6 @@ export default function PublicIntakeForm() {
           })}
         </div>
 
-        {/* Submit */}
         <div className="pt-4">
           <Button
             onClick={handleSubmit}
@@ -594,7 +579,7 @@ export default function PublicIntakeForm() {
             )}
           </Button>
           <p className="text-center text-white/30 text-xs mt-3">
-            Powered by GigVorx · Your information is secure and confidential
+            Powered by GigVorx - Your information is secure and confidential
           </p>
         </div>
       </div>

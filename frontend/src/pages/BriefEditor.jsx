@@ -1,24 +1,24 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "@/lib/AuthContext";
-import { useCurrency } from "@/lib/CurrencyContext";
-import { usePlan } from "@/lib/usePlan";
-import { useCollection } from "@/lib/useCollection";
-import { supabase } from "@/lib/supabase";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShareBriefDialog } from "@/components/ShareBriefDialog";
+import { useAuth } from "../lib/AuthContext";
+import { useCurrency } from "../lib/CurrencyContext";
+import { usePlan } from "../lib/usePlan";
+import { useCollection } from "../lib/useCollection";
+import { supabase } from "../lib/supabase";
+import { useToast } from "../hooks/use-toast";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
+import { Label } from "../components/ui/label";
+import { Badge } from "../components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { ShareBriefDialog } from "../components/ShareBriefDialog";
 import {
-  Save, Trash2, Download, Share2, Link2, MessageCircle, Eye, Plus, X, ChevronDown,
+  Save, Trash2, Download, Link2, MessageCircle, Eye, Plus, X, ChevronDown,
   Type, FileText, List, Upload, Image, Link, Video, CheckCircle2
 } from "lucide-react";
 import { jsPDF } from "jspdf";
