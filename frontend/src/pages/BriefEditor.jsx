@@ -309,6 +309,7 @@ export default function BriefEditor() {
                 nicheSlug={form.niche}
                 questions={form.questions}
                 onQuestionsChange={(newQuestions) => setForm(f => ({ ...f, questions: newQuestions }))}
+                userId={user?.id}
               />
             </section>
 
