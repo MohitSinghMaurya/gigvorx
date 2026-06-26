@@ -364,8 +364,8 @@ export default function Pricing() {
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
             Questions? Email us at{" "}
-            <a href="mailto:apexflowsystem82@gmail.com" className="text-foreground underline">
-              apexflowsystem82@gmail.com
+            <a href="mailto:gigvorx@gmail.com" className="text-foreground underline">
+              gigvorx@gmail.com
             </a>
             {" "}or WhatsApp{" "}
             <a href="https://wa.me/918273278896" className="text-foreground underline">
