@@ -1,4 +1,3 @@
-PublicIntakeForm.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
