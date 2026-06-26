@@ -673,7 +673,7 @@ function ColorPickerField({ value, onChange }) {
   );
 }
 
-// ===== MULTI-SELECT (FIXED) =====
+// ===== MULTI-SELECT =====
 function MultiSelectField({ question, value, onChange }) {
   const [selected, setSelected] = useState(value || []);
 
@@ -706,7 +706,7 @@ function MultiSelectField({ question, value, onChange }) {
   );
 }
 
-// ===== TOGGLE (FIXED) =====
+// ===== TOGGLE =====
 function ToggleField({ question, value, onChange }) {
   const [selected, setSelected] = useState(value || '');
 
@@ -735,28 +735,70 @@ function ToggleField({ question, value, onChange }) {
   );
 }
 
-// ===== BUDGET FIELD (FREE TEXT) =====
+// ===== BUDGET FIELD (DYNAMIC CURRENCY) =====
 function BudgetField({ value, onChange, placeholder }) {
   const [amount, setAmount] = useState(value || '');
+  const [currency, setCurrency] = useState('₹');
+
+  useEffect(() => {
+    const detectCurrency = async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        const countryCurrency = {
+          'IN': '₹', 'US': '$', 'GB': '£', 'EU': '€', 'CA': 'C$',
+          'AU': 'A$', 'JP': '¥', 'CN': '¥', 'SG': 'S$', 'AE': 'AED',
+          'SA': '﷼', 'BR': 'R$', 'MX': 'Mex$', 'ZA': 'R', 'NG': '₦',
+          'PK': '₨', 'BD': '৳', 'LK': 'රු', 'MY': 'RM', 'TH': '฿',
+          'ID': 'Rp', 'PH': '₱', 'VN': '₫', 'KR': '₩', 'RU': '₽',
+        };
+        setCurrency(countryCurrency[data.country_code] || '$');
+      } catch {
+        const lang = navigator.language || 'en-US';
+        if (lang.startsWith('en-IN') || lang === 'hi') setCurrency('₹');
+        else if (lang.startsWith('en-GB')) setCurrency('£');
+        else if (lang.startsWith('en-EU') || lang.startsWith('de') || lang.startsWith('fr') || lang.startsWith('es')) setCurrency('€');
+        else if (lang.startsWith('ja')) setCurrency('¥');
+        else if (lang.startsWith('zh')) setCurrency('¥');
+        else setCurrency('$');
+      }
+    };
+    detectCurrency();
+  }, []);
 
   const handleChange = (e) => {
     const val = e.target.value.replace(/[^0-9]/g, '');
     setAmount(val);
-    onChange(val);
+    onChange(`${currency}${val}`);
   };
 
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">
-        ₹
-      </span>
+      <select
+        value={currency}
+        onChange={(e) => {
+          setCurrency(e.target.value);
+          if (amount) onChange(`${e.target.value}${amount}`);
+        }}
+        className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-14 text-sm bg-transparent border-0 focus:ring-0 cursor-pointer font-medium text-muted-foreground"
+      >
+        <option value="₹">₹</option>
+        <option value="$">$</option>
+        <option value="£">£</option>
+        <option value="€">€</option>
+        <option value="¥">¥</option>
+        <option value="A$">A$</option>
+        <option value="C$">C$</option>
+        <option value="S$">S$</option>
+        <option value="AED">AED</option>
+      </select>
       <Input
         type="text"
         inputMode="numeric"
         placeholder={placeholder || "Enter amount"}
         value={amount}
         onChange={handleChange}
-        className="pl-8"
+        className="pl-16"
       />
     </div>
   );
@@ -1051,14 +1093,12 @@ export function SmartNicheBrief({ nicheSlug, questions, onQuestionsChange, userI
   const [customQuestions, setCustomQuestions] = useState([]);
   const [templates, setTemplates] = useState(() => loadCustomTemplates(userId));
 
-  // Merge default + custom questions
   const allQuestions = [...nicheConfig.questions, ...customQuestions];
 
   const updateAnswer = (questionId, answer) => {
     const newAnswers = { ...answers, [questionId]: answer };
     setAnswers(newAnswers);
     
-    // Convert answers back to questions format for parent
     const updatedQuestions = allQuestions.map(q => ({
       id: q.id,
       q: q.label,
