@@ -17,7 +17,7 @@ import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
   ArrowLeft, Save, Eye, Download, MessageCircle, Plus, Trash2,
   GripVertical, CheckCircle2, BookMarked, FolderOpen, X, Link2,
-  Type, FileUp, Link as LinkIcon, Video, Image
+  Type, FileUp, Link as LinkIcon, Video, Image, List, AlignLeft, AlignJustify
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -33,11 +33,13 @@ const SECTIONS_TEMPLATE = (niche) => ({
 });
 
 const QUESTION_TYPES = [
-  { value: "text", label: "Text", icon: Type, desc: "Client types an answer" },
-  { value: "file", label: "File Upload", icon: FileUp, desc: "Client uploads files" },
-  { value: "link", label: "Link", icon: LinkIcon, desc: "Client shares a URL" },
-  { value: "video", label: "Video", icon: Video, desc: "Client shares a video link" },
-  { value: "image", label: "Image", icon: Image, desc: "Client uploads images" },
+  { value: "text", label: "Short Answer", icon: Type, desc: "One-line text answer", color: "bg-slate-100 text-slate-700 border-slate-200" },
+  { value: "long", label: "Long Answer", icon: AlignJustify, desc: "Multi-line paragraph", color: "bg-blue-50 text-blue-700 border-blue-200" },
+  { value: "select", label: "Multiple Choice", icon: List, desc: "Client picks from options", color: "bg-purple-50 text-purple-700 border-purple-200" },
+  { value: "file", label: "File Upload", icon: FileUp, desc: "Upload PDF, DOC, ZIP", color: "bg-amber-50 text-amber-700 border-amber-200" },
+  { value: "image", label: "Image Upload", icon: Image, desc: "Upload PNG, JPG, GIF", color: "bg-rose-50 text-rose-700 border-rose-200" },
+  { value: "link", label: "URL / Link", icon: LinkIcon, desc: "Share a website URL", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { value: "video", label: "Video Link", icon: Video, desc: "Share a video URL", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
 ];
 
 function getTemplatesKey(userId) {
@@ -75,9 +77,12 @@ export default function BriefEditor() {
       clientId: "",
       niche: initialNiche.slug,
       status: "draft",
-      questions: initialNiche.questions.map(q => ({
-        id: Math.random().toString(36).slice(2), q, a: "", type: "text"
-      })),
+      questions: initialNiche.questions.map(q => {
+        if (typeof q === "string") {
+          return { id: Math.random().toString(36).slice(2), q, a: "", type: "long" };
+        }
+        return { id: Math.random().toString(36).slice(2), q: q.text || q.q, a: "", type: q.type || "long" };
+      }),
       sections: SECTIONS_TEMPLATE(initialNiche),
       confirmation: false,
     };
@@ -89,6 +94,10 @@ export default function BriefEditor() {
   const [templateName, setTemplateName] = useState("");
   const [templates, setTemplates] = useState(() => loadTemplates(user?.id));
   const [shareOpen, setShareOpen] = useState(false);
+  const [addQuestionOpen, setAddQuestionOpen] = useState(false);
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [newQuestionType, setNewQuestionType] = useState("long");
+  const [newQuestionOptions, setNewQuestionOptions] = useState(["", ""]);
   const previewRef = useRef(null);
 
   useEffect(() => {
@@ -103,7 +112,6 @@ export default function BriefEditor() {
         });
       }
     }
-    // eslint-disable-next-line
   }, [id, briefs.items.length]);
 
   useEffect(() => {
@@ -117,7 +125,36 @@ export default function BriefEditor() {
   const setSection = (k, v) => setForm(f => ({ ...f, sections: { ...f.sections, [k]: v } }));
   const updateQuestion = (qid, patch) => setForm(f => ({ ...f, questions: f.questions.map(q => q.id === qid ? { ...q, ...patch } : q) }));
   const removeQuestion = (qid) => setForm(f => ({ ...f, questions: f.questions.filter(q => q.id !== qid) }));
-  const addQuestion = (type = "text") => setForm(f => ({ ...f, questions: [...f.questions, { id: Math.random().toString(36).slice(2), q: "", a: "", type, custom: true }] }));
+
+  const openAddQuestion = () => {
+    setNewQuestionText("");
+    setNewQuestionType("long");
+    setNewQuestionOptions(["", ""]);
+    setAddQuestionOpen(true);
+  };
+
+  const addQuestion = () => {
+    if (!newQuestionText.trim()) { toast.error("Please enter a question"); return; }
+    const newQ = {
+      id: Math.random().toString(36).slice(2),
+      q: newQuestionText.trim(),
+      a: "",
+      type: newQuestionType,
+      custom: true,
+    };
+    if (newQuestionType === "select") {
+      const validOptions = newQuestionOptions.filter(o => o.trim());
+      if (validOptions.length < 2) { toast.error("Please add at least 2 options"); return; }
+      newQ.options = validOptions;
+    }
+    setForm(f => ({ ...f, questions: [...f.questions, newQ] }));
+    setAddQuestionOpen(false);
+    toast.success(`Added ${QUESTION_TYPES.find(t => t.value === newQuestionType)?.label || "question"}`);
+  };
+
+  const addOption = () => setNewQuestionOptions(prev => [...prev, ""]);
+  const updateOption = (i, val) => setNewQuestionOptions(prev => prev.map((o, idx) => idx === i ? val : o));
+  const removeOption = (i) => setNewQuestionOptions(prev => prev.filter((_, idx) => idx !== i));
 
   const handleSaveTemplate = () => {
     if (!templateName.trim()) { toast.error("Please enter a template name"); return; }
@@ -125,7 +162,13 @@ export default function BriefEditor() {
     const newTemplate = {
       id: Math.random().toString(36).slice(2),
       name: templateName.trim(),
-      questions: form.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "", type: q.type || "text" })),
+      questions: form.questions.map(q => ({
+        id: Math.random().toString(36).slice(2),
+        q: q.q,
+        a: "",
+        type: q.type || "long",
+        options: q.options,
+      })),
       createdAt: new Date().toISOString(),
       count: form.questions.length,
     };
@@ -134,21 +177,33 @@ export default function BriefEditor() {
     saveTemplates(user?.id, updated);
     setTemplateName("");
     setSaveTemplateOpen(false);
-    toast.success(`"${newTemplate.name}" saved! You can load it anytime.`);
+    toast.success(`"${newTemplate.name}" saved!`);
   };
 
   const handleLoadTemplate = (template) => {
-    const loaded = template.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "", type: q.type || "text" }));
+    const loaded = template.questions.map(q => ({
+      id: Math.random().toString(36).slice(2),
+      q: q.q,
+      a: "",
+      type: q.type || "long",
+      options: q.options,
+    }));
     setForm(f => ({ ...f, questions: [...f.questions, ...loaded] }));
     setLoadTemplateOpen(false);
-    toast.success(`Loaded ${loaded.length} questions from "${template.name}"`);
+    toast.success(`Loaded ${loaded.length} questions`);
   };
 
   const handleReplaceWithTemplate = (template) => {
-    const loaded = template.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "", type: q.type || "text" }));
+    const loaded = template.questions.map(q => ({
+      id: Math.random().toString(36).slice(2),
+      q: q.q,
+      a: "",
+      type: q.type || "long",
+      options: q.options,
+    }));
     setForm(f => ({ ...f, questions: loaded }));
     setLoadTemplateOpen(false);
-    toast.success(`Replaced with ${loaded.length} questions from "${template.name}"`);
+    toast.success(`Replaced with ${loaded.length} questions`);
   };
 
   const handleDeleteTemplate = (templateId) => {
@@ -183,10 +238,13 @@ export default function BriefEditor() {
     dump("Budget", form.sections.budget);
     dump("Deliverables", form.sections.deliverables);
     wrap("Questions & Answers", 14, true);
-    form.questions.forEach((q, i) => { 
-      const typeLabel = QUESTION_TYPES.find(t => t.value === q.type)?.label || "Text";
-      wrap(`Q${i + 1}. ${q.q} [${typeLabel}]`, 11, true); 
-      wrap(q.a || "—"); 
+    form.questions.forEach((q, i) => {
+      const qt = QUESTION_TYPES.find(t => t.value === q.type);
+      wrap(`Q${i + 1}. ${q.q} [${qt?.label || "Text"}]`, 11, true);
+      if (q.type === "select" && q.options) {
+        wrap(`Options: ${q.options.join(", ")}`, 10);
+      }
+      wrap(q.a || "—");
     });
     dump("Notes", form.sections.notes);
     wrap(`Confirmation: ${form.confirmation ? "Approved by client ✓" : "Pending client approval"}`, 11, true);
@@ -198,11 +256,7 @@ export default function BriefEditor() {
     whatsappShare(summary);
   };
 
-  const getTypeIcon = (type) => {
-    const t = QUESTION_TYPES.find(x => x.value === type);
-    const Icon = t?.icon || Type;
-    return <Icon className="w-3.5 h-3.5" />;
-  };
+  const getTypeConfig = (type) => QUESTION_TYPES.find(t => t.value === type) || QUESTION_TYPES[1];
 
   return (
     <div className="space-y-6">
@@ -287,7 +341,7 @@ export default function BriefEditor() {
             ))}
 
             <section>
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground">Questions &amp; Answers</p>
                 <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="outline" onClick={() => setLoadTemplateOpen(true)} className="h-7 text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
@@ -303,45 +357,40 @@ export default function BriefEditor() {
                 </div>
               </div>
 
-              {/* Add question type buttons */}
-              <div className="flex gap-1.5 flex-wrap mb-4">
-                {QUESTION_TYPES.map(qt => (
-                  <button
-                    key={qt.value}
-                    onClick={() => addQuestion(qt.value)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium hover:bg-muted transition-colors"
-                    title={qt.desc}
-                  >
-                    <qt.icon className="w-3.5 h-3.5" />
-                    {qt.label}
-                  </button>
-                ))}
-              </div>
+              <Button
+                variant="outline"
+                onClick={openAddQuestion}
+                className="w-full mb-4 h-10 border-dashed border-2 hover:border-solid hover:bg-muted/30"
+              >
+                <Plus className="w-4 h-4 mr-2" />Add a question
+              </Button>
 
               {form.questions.length === 0 && (
                 <div className="text-center py-8 border border-dashed rounded-lg text-muted-foreground text-sm">
                   <p>No questions yet.</p>
-                  <p className="mt-1">Click a question type above to add one.</p>
+                  <p className="mt-1">Click "Add a question" to get started.</p>
                 </div>
               )}
 
               <div className="space-y-4">
                 {form.questions.map((q, i) => {
-                  const qType = QUESTION_TYPES.find(t => t.value === q.type) || QUESTION_TYPES[0];
+                  const typeConfig = getTypeConfig(q.type);
+                  const TypeIcon = typeConfig.icon;
                   return (
                     <div key={q.id} className="p-4 rounded-lg border bg-muted/20 group">
                       <div className="flex items-start gap-2">
-                        <GripVertical className="w-4 h-4 mt-2 text-muted-foreground/40 shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs text-muted-foreground">
-                              <qType.icon className="w-3 h-3" />
-                              {qType.label}
+                        <GripVertical className="w-4 h-4 mt-1 text-muted-foreground/40 shrink-0" />
+                        <div className="flex-1 space-y-2 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-muted-foreground font-mono">Q{i + 1}</span>
+                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border ${typeConfig.color}`}>
+                              <TypeIcon className="w-3 h-3" />
+                              {typeConfig.label}
                             </div>
                             <select
-                              value={q.type || "text"}
+                              value={q.type || "long"}
                               onChange={(e) => updateQuestion(q.id, { type: e.target.value })}
-                              className="h-6 rounded border bg-background px-2 text-xs"
+                              className="h-6 rounded border bg-background px-2 text-[11px]"
                             >
                               {QUESTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                             </select>
@@ -350,22 +399,59 @@ export default function BriefEditor() {
                             data-testid={`brief-q-${i}`}
                             value={q.q}
                             onChange={(e) => updateQuestion(q.id, { q: e.target.value })}
-                            className="font-semibold border-0 bg-transparent px-0 focus-visible:ring-0"
-                            placeholder={`${qType.label} question ${i + 1}`}
+                            className="font-semibold border-0 bg-transparent px-0 focus-visible:ring-0 text-sm"
+                            placeholder={`Enter your ${typeConfig.label.toLowerCase()} question...`}
                           />
-                          <Textarea
-                            data-testid={`brief-a-${i}`}
-                            value={q.a}
-                            onChange={(e) => updateQuestion(q.id, { a: e.target.value })}
-                            rows={2}
-                            placeholder={qType.value === "file" ? "Client will upload files here..." : qType.value === "link" ? "Client will share a URL here..." : qType.value === "video" ? "Client will share a video link here..." : qType.value === "image" ? "Client will upload images here..." : "Client's answer..."}
-                            className="border-0 bg-transparent px-0 focus-visible:ring-0 text-muted-foreground"
-                          />
+                          {q.type === "select" && (
+                            <div className="space-y-1.5 pl-2 border-l-2 border-purple-200">
+                              <p className="text-[11px] text-muted-foreground">Options (client will pick one):</p>
+                              {(q.options || []).map((opt, optIdx) => (
+                                <div key={optIdx} className="flex items-center gap-2">
+                                  <Input
+                                    value={opt}
+                                    onChange={(e) => {
+                                      const newOpts = [...(q.options || [])];
+                                      newOpts[optIdx] = e.target.value;
+                                      updateQuestion(q.id, { options: newOpts });
+                                    }}
+                                    className="h-7 text-sm border-0 bg-transparent px-0 focus-visible:ring-0"
+                                    placeholder={`Option ${optIdx + 1}`}
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const newOpts = (q.options || []).filter((_, idx) => idx !== optIdx);
+                                      updateQuestion(q.id, { options: newOpts });
+                                    }}
+                                    className="text-muted-foreground hover:text-destructive"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => updateQuestion(q.id, { options: [...(q.options || []), ""] })}
+                                className="h-6 text-[11px] text-purple-600"
+                              >
+                                <Plus className="w-3 h-3 mr-1" />Add option
+                              </Button>
+                            </div>
+                          )}
+                          <div className="text-xs text-muted-foreground bg-background/50 rounded px-2 py-1.5 border border-dashed">
+                            {q.type === "text" && "Client will type a short answer here..."}
+                            {q.type === "long" && "Client will type a detailed answer here..."}
+                            {q.type === "select" && "Client will select one option..."}
+                            {q.type === "file" && "Client will upload files (PDF, DOC, ZIP) here..."}
+                            {q.type === "image" && "Client will upload images (PNG, JPG, GIF) here..."}
+                            {q.type === "link" && "Client will paste a URL here..."}
+                            {q.type === "video" && "Client will paste a video link here..."}
+                          </div>
                         </div>
                         <button
                           onClick={() => removeQuestion(q.id)}
                           data-testid={`brief-remove-q-${i}`}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0 mt-1"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -405,11 +491,94 @@ export default function BriefEditor() {
             <h3>Questions & Answers</h3>
             <ol>{form.questions.map(q => {
               const qt = QUESTION_TYPES.find(t => t.value === q.type);
-              return <li key={q.id}><b>{q.q}</b> <span className="text-xs text-muted-foreground">({qt?.label || "Text"})</span><br /><span className="text-muted-foreground">{q.a || "—"}</span></li>;
+              return (
+                <li key={q.id}>
+                  <b>{q.q}</b> <span className="text-xs text-muted-foreground">({qt?.label || "Text"})</span>
+                  {q.type === "select" && q.options && <div className="text-xs text-muted-foreground mt-1">Options: {q.options.join(", ")}</div>}
+                  <br /><span className="text-muted-foreground">{q.a || "—"}</span>
+                </li>
+              );
             })}</ol>
             <h3>Notes</h3>
             <p className="whitespace-pre-wrap text-sm">{form.sections.notes?.replace(/^#.*\n/m, "")}</p>
             <p className="mt-6 font-semibold">{form.confirmation ? "✅ Approved by client" : "⏳ Pending approval"}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addQuestionOpen} onOpenChange={setAddQuestionOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Plus className="w-5 h-5" />Add a Question</DialogTitle>
+            <DialogDescription>Choose the question type and enter your question.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label>Question</Label>
+              <Textarea
+                value={newQuestionText}
+                onChange={(e) => setNewQuestionText(e.target.value)}
+                placeholder="e.g. Do you have any reference websites?"
+                rows={2}
+                className="mt-1.5"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="mb-2 block">Question type</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {QUESTION_TYPES.map(qt => {
+                  const QtIcon = qt.icon;
+                  const isSelected = newQuestionType === qt.value;
+                  return (
+                    <button
+                      key={qt.value}
+                      onClick={() => setNewQuestionType(qt.value)}
+                      className={`flex items-start gap-2 p-2.5 rounded-lg border text-left transition-all ${
+                        isSelected
+                          ? "border-foreground bg-foreground/5 ring-1 ring-foreground"
+                          : "border-muted hover:border-foreground/20 hover:bg-muted/30"
+                      }`}
+                    >
+                      <QtIcon className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? "text-foreground" : "text-muted-foreground"}`} />
+                      <div>
+                        <p className={`text-xs font-medium ${isSelected ? "text-foreground" : "text-muted-foreground"}`}>{qt.label}</p>
+                        <p className="text-[10px] text-muted-foreground leading-tight">{qt.desc}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {newQuestionType === "select" && (
+              <div className="space-y-2">
+                <Label>Options</Label>
+                {newQuestionOptions.map((opt, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      value={opt}
+                      onChange={(e) => updateOption(i, e.target.value)}
+                      placeholder={`Option ${i + 1}`}
+                      className="text-sm"
+                    />
+                    {newQuestionOptions.length > 2 && (
+                      <button onClick={() => removeOption(i)} className="text-muted-foreground hover:text-destructive">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <Button size="sm" variant="ghost" onClick={addOption} className="h-7 text-xs">
+                  <Plus className="w-3 h-3 mr-1" />Add option
+                </Button>
+              </div>
+            )}
+            <div className="flex gap-2 pt-2">
+              <Button onClick={addQuestion} className="bg-brand-gradient text-white flex-1 hover:opacity-90">
+                <Plus className="w-4 h-4 mr-1.5" />Add question
+              </Button>
+              <Button variant="outline" onClick={() => setAddQuestionOpen(false)}>Cancel</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -428,7 +597,15 @@ export default function BriefEditor() {
             <div className="bg-muted/30 rounded-lg p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Questions to save ({form.questions.length}):</p>
               <ul className="space-y-1 max-h-32 overflow-y-auto">
-                {form.questions.map((q, i) => <li key={q.id} className="truncate">{i + 1}. {q.q || "Empty question"} <span className="text-xs text-muted-foreground">({QUESTION_TYPES.find(t => t.value === q.type)?.label || "Text"})</span></li>)}
+                {form.questions.map((q, i) => {
+                  const qt = QUESTION_TYPES.find(t => t.value === q.type);
+                  return (
+                    <li key={q.id} className="truncate text-xs">
+                      {i + 1}. {q.q || "Empty question"}
+                      <span className="text-[10px] text-muted-foreground ml-1">({qt?.label || "Text"})</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
             <div className="flex gap-2">
@@ -459,7 +636,14 @@ export default function BriefEditor() {
                     <p className="font-semibold text-sm">{t.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{t.count} questions · Saved {formatDate(t.createdAt)}</p>
                     <ul className="mt-2 space-y-0.5 max-h-20 overflow-y-auto">
-                      {t.questions.slice(0, 3).map((q, i) => <li key={i} className="text-xs text-muted-foreground truncate">{i + 1}. {q.q} <span className="text-[10px]">({QUESTION_TYPES.find(x => x.value === q.type)?.label || "Text"})</span></li>)}
+                      {t.questions.slice(0, 3).map((q, i) => {
+                        const qt = QUESTION_TYPES.find(x => x.value === q.type);
+                        return (
+                          <li key={i} className="text-xs text-muted-foreground truncate">
+                            {i + 1}. {q.q} <span className="text-[10px]">({qt?.label || "Text"})</span>
+                          </li>
+                        );
+                      })}
                       {t.questions.length > 3 && <li className="text-xs text-muted-foreground">+{t.questions.length - 3} more...</li>}
                     </ul>
                   </div>

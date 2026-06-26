@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import {
   Send, CheckCircle2, Loader2, Sparkles, FileText,
   Upload, X, AlertCircle, Mail, Phone, Building2,
-  Type, FileUp, Link as LinkIcon, Video, Image, ExternalLink
+  Type, FileUp, Link as LinkIcon, Video, Image, List, ExternalLink, AlignJustify
 } from "lucide-react";
 
 async function uploadFile(file, bucket = "gigvorx-attachments") {
@@ -31,11 +31,13 @@ async function uploadFile(file, bucket = "gigvorx-attachments") {
 }
 
 const QUESTION_TYPES = {
-  text: { label: "Text", icon: Type, placeholder: "Your answer..." },
+  text: { label: "Short Answer", icon: Type, placeholder: "Type your answer..." },
+  long: { label: "Long Answer", icon: AlignJustify, placeholder: "Type a detailed answer..." },
+  select: { label: "Multiple Choice", icon: List, placeholder: "Select an option..." },
   file: { label: "File Upload", icon: FileUp, placeholder: "Upload files..." },
-  link: { label: "Link", icon: LinkIcon, placeholder: "Paste a URL..." },
-  video: { label: "Video", icon: Video, placeholder: "Paste a video URL (YouTube, Vimeo, etc.)..." },
-  image: { label: "Image", icon: Image, placeholder: "Upload images..." },
+  image: { label: "Image Upload", icon: Image, placeholder: "Upload images..." },
+  link: { label: "URL / Link", icon: LinkIcon, placeholder: "Paste a URL..." },
+  video: { label: "Video Link", icon: Video, placeholder: "Paste a video URL..." },
 };
 
 export default function PublicIntakeForm() {
@@ -74,7 +76,12 @@ export default function PublicIntakeForm() {
             niche: niche.slug,
             title: `${niche.name} Project Brief`,
             description: `Fill out this brief to help us understand your ${niche.name.toLowerCase()} project needs.`,
-            questions: niche.questions.map((q, i) => ({ id: `q-${i}`, text: q, type: "text" })),
+            questions: niche.questions.map((q, i) => {
+              if (typeof q === "string") {
+                return { id: `q-${i}`, text: q, type: "long" };
+              }
+              return { id: `q-${i}`, text: q.text || q.q, type: q.type || "long", options: q.options };
+            }),
             owner: { name: "GigVorx Freelancer", email: "gigvorx@gmail.com" },
             allowFileUpload: true,
             maxFiles: 3,
@@ -91,7 +98,8 @@ export default function PublicIntakeForm() {
             questions: briefData.questions?.map((q, i) => ({
               id: q.id || `q-${i}`,
               text: q.q,
-              type: q.type || "text",
+              type: q.type || "long",
+              options: q.options,
             })) || [],
             owner: briefData.owner,
             allowFileUpload: true,
@@ -134,9 +142,12 @@ export default function PublicIntakeForm() {
     if (totalQuestions === 0) return 0;
     let answered = 0;
     briefConfig.questions.forEach(q => {
-      if (q.type === "text" || q.type === "link" || q.type === "video") {
+      const type = q.type || "long";
+      if (type === "text" || type === "long" || type === "link" || type === "video") {
         if (answers[q.id]?.trim()) answered++;
-      } else if (q.type === "file" || q.type === "image") {
+      } else if (type === "select") {
+        if (answers[q.id]) answered++;
+      } else if (type === "file" || type === "image") {
         if (files[q.id]?.length > 0) answered++;
       }
     });
@@ -153,7 +164,6 @@ export default function PublicIntakeForm() {
       setSubmitting(true);
       setUploadProgress(10);
 
-      // Upload all files from all questions
       const uploadedFiles = {};
       const allFileEntries = Object.entries(files);
       let uploadedCount = 0;
@@ -198,7 +208,6 @@ export default function PublicIntakeForm() {
       }
       setUploadProgress(75);
 
-      // Build questions with answers
       const questionsWithAnswers = briefConfig.questions.map(q => {
         let answer = answers[q.id] || "";
         if ((q.type === "file" || q.type === "image") && uploadedFiles[q.id]) {
@@ -208,7 +217,7 @@ export default function PublicIntakeForm() {
           id: q.id,
           q: q.text,
           a: answer,
-          type: q.type || "text",
+          type: q.type || "long",
         };
       });
 
@@ -300,17 +309,62 @@ export default function PublicIntakeForm() {
   const pct = completionPercent();
 
   const renderQuestionInput = (q) => {
-    const type = q.type || "text";
-    const typeConfig = QUESTION_TYPES[type] || QUESTION_TYPES.text;
-    const TypeIcon = typeConfig.icon;
+    const type = q.type || "long";
+    const typeConfig = QUESTION_TYPES[type] || QUESTION_TYPES.long;
+
+    if (type === "text") {
+      return (
+        <Input
+          value={answers[q.id] || ""}
+          onChange={(e) => updateAnswer(q.id, e.target.value)}
+          placeholder={typeConfig.placeholder}
+          className="w-full"
+        />
+      );
+    }
+
+    if (type === "long") {
+      return (
+        <Textarea
+          value={answers[q.id] || ""}
+          onChange={(e) => updateAnswer(q.id, e.target.value)}
+          placeholder={typeConfig.placeholder}
+          rows={4}
+          className="resize-y"
+        />
+      );
+    }
+
+    if (type === "select") {
+      return (
+        <div className="space-y-2">
+          {(q.options || []).map((opt, i) => (
+            <label key={i} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/30 transition-colors">
+              <input
+                type="radio"
+                name={`question-${q.id}`}
+                value={opt}
+                checked={answers[q.id] === opt}
+                onChange={(e) => updateAnswer(q.id, e.target.value)}
+                className="w-4 h-4 accent-foreground"
+              />
+              <span className="text-sm">{opt}</span>
+            </label>
+          ))}
+          {(!q.options || q.options.length === 0) && (
+            <p className="text-sm text-muted-foreground">No options available for this question.</p>
+          )}
+        </div>
+      );
+    }
 
     if (type === "file") {
       return (
         <div className="space-y-2">
-          <div className="border-2 border-dashed border-muted rounded-lg p-4 text-center hover:bg-muted/20 transition-colors">
-            <input type="file" multiple onChange={(e) => handleFileChange(q.id, e)} className="hidden" id={`file-${q.id}`} accept=".pdf,.doc,.docx,.zip" />
-            <label htmlFor={`file-${q.id}`} className="cursor-pointer">
-              <FileUp className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+          <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors cursor-pointer">
+            <input type="file" multiple onChange={(e) => handleFileChange(q.id, e)} className="hidden" id={`file-${q.id}`} accept=".pdf,.doc,.docx,.zip,.txt" />
+            <label htmlFor={`file-${q.id}`} className="cursor-pointer block">
+              <FileUp className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-medium">Click to upload files</p>
               <p className="text-xs text-muted-foreground mt-1">PDF, DOC, ZIP up to 10MB each</p>
             </label>
@@ -336,10 +390,10 @@ export default function PublicIntakeForm() {
     if (type === "image") {
       return (
         <div className="space-y-2">
-          <div className="border-2 border-dashed border-muted rounded-lg p-4 text-center hover:bg-muted/20 transition-colors">
+          <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors cursor-pointer">
             <input type="file" multiple onChange={(e) => handleFileChange(q.id, e)} className="hidden" id={`image-${q.id}`} accept=".png,.jpg,.jpeg,.gif,.webp" />
-            <label htmlFor={`image-${q.id}`} className="cursor-pointer">
-              <Image className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+            <label htmlFor={`image-${q.id}`} className="cursor-pointer block">
+              <Image className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-medium">Click to upload images</p>
               <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF, WEBP up to 10MB each</p>
             </label>
@@ -399,12 +453,11 @@ export default function PublicIntakeForm() {
       );
     }
 
-    // Default text
     return (
       <Textarea
         value={answers[q.id] || ""}
         onChange={(e) => updateAnswer(q.id, e.target.value)}
-        placeholder={typeConfig.placeholder}
+        placeholder="Your answer..."
         rows={3}
         className="resize-y"
       />
@@ -462,7 +515,7 @@ export default function PublicIntakeForm() {
             <div className="space-y-6 mb-8">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Project Questions</h3>
               {briefConfig?.questions.map((q, i) => {
-                const typeConfig = QUESTION_TYPES[q.type] || QUESTION_TYPES.text;
+                const typeConfig = QUESTION_TYPES[q.type] || QUESTION_TYPES.long;
                 const TypeIcon = typeConfig.icon;
                 return (
                   <div key={q.id} className="space-y-2">
