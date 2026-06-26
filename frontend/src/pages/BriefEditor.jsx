@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
-import { ShareDialog } from "@/components/ShareBriefDialog";
+import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
   ArrowLeft, Save, Eye, Download, MessageCircle, Plus, Trash2,
   GripVertical, CheckCircle2, BookMarked, FolderOpen, X, Link2,
@@ -406,7 +406,7 @@ export default function BriefEditor() {
         </DialogContent>
       </Dialog>
 
-      {editing && <ShareDialog brief={briefs.get(id)} open={shareOpen} onOpenChange={setShareOpen} />}
+      {editing && <ShareBriefDialog brief={briefs.get(id)} open={shareOpen} onOpenChange={setShareOpen} />}
     </div>
   );
 }
