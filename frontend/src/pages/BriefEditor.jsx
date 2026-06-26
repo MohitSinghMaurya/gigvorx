@@ -17,6 +17,7 @@ import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
   ArrowLeft, Save, Eye, Download, MessageCircle, Plus, Trash2,
   GripVertical, CheckCircle2, BookMarked, FolderOpen, X, Link2,
+  Type, FileUp, Link as LinkIcon, Video, Image
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -30,6 +31,14 @@ const SECTIONS_TEMPLATE = (niche) => ({
   deliverables: `# Deliverables\n\nFinal assets, formats, and handover process.`,
   notes: `# Notes\n\nAnything else that matters for this engagement.`,
 });
+
+const QUESTION_TYPES = [
+  { value: "text", label: "Text", icon: Type, desc: "Client types an answer" },
+  { value: "file", label: "File Upload", icon: FileUp, desc: "Client uploads files" },
+  { value: "link", label: "Link", icon: LinkIcon, desc: "Client shares a URL" },
+  { value: "video", label: "Video", icon: Video, desc: "Client shares a video link" },
+  { value: "image", label: "Image", icon: Image, desc: "Client uploads images" },
+];
 
 function getTemplatesKey(userId) {
   return `gv_question_templates_${userId}`;
@@ -67,7 +76,7 @@ export default function BriefEditor() {
       niche: initialNiche.slug,
       status: "draft",
       questions: initialNiche.questions.map(q => ({
-        id: Math.random().toString(36).slice(2), q, a: ""
+        id: Math.random().toString(36).slice(2), q, a: "", type: "text"
       })),
       sections: SECTIONS_TEMPLATE(initialNiche),
       confirmation: false,
@@ -108,7 +117,7 @@ export default function BriefEditor() {
   const setSection = (k, v) => setForm(f => ({ ...f, sections: { ...f.sections, [k]: v } }));
   const updateQuestion = (qid, patch) => setForm(f => ({ ...f, questions: f.questions.map(q => q.id === qid ? { ...q, ...patch } : q) }));
   const removeQuestion = (qid) => setForm(f => ({ ...f, questions: f.questions.filter(q => q.id !== qid) }));
-  const addQuestion = () => setForm(f => ({ ...f, questions: [...f.questions, { id: Math.random().toString(36).slice(2), q: "", a: "", custom: true }] }));
+  const addQuestion = (type = "text") => setForm(f => ({ ...f, questions: [...f.questions, { id: Math.random().toString(36).slice(2), q: "", a: "", type, custom: true }] }));
 
   const handleSaveTemplate = () => {
     if (!templateName.trim()) { toast.error("Please enter a template name"); return; }
@@ -116,7 +125,7 @@ export default function BriefEditor() {
     const newTemplate = {
       id: Math.random().toString(36).slice(2),
       name: templateName.trim(),
-      questions: form.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "" })),
+      questions: form.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "", type: q.type || "text" })),
       createdAt: new Date().toISOString(),
       count: form.questions.length,
     };
@@ -129,14 +138,14 @@ export default function BriefEditor() {
   };
 
   const handleLoadTemplate = (template) => {
-    const loaded = template.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "" }));
+    const loaded = template.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "", type: q.type || "text" }));
     setForm(f => ({ ...f, questions: [...f.questions, ...loaded] }));
     setLoadTemplateOpen(false);
     toast.success(`Loaded ${loaded.length} questions from "${template.name}"`);
   };
 
   const handleReplaceWithTemplate = (template) => {
-    const loaded = template.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "" }));
+    const loaded = template.questions.map(q => ({ id: Math.random().toString(36).slice(2), q: q.q, a: "", type: q.type || "text" }));
     setForm(f => ({ ...f, questions: loaded }));
     setLoadTemplateOpen(false);
     toast.success(`Replaced with ${loaded.length} questions from "${template.name}"`);
@@ -174,7 +183,11 @@ export default function BriefEditor() {
     dump("Budget", form.sections.budget);
     dump("Deliverables", form.sections.deliverables);
     wrap("Questions & Answers", 14, true);
-    form.questions.forEach((q, i) => { wrap(`Q${i + 1}. ${q.q}`, 11, true); wrap(q.a || "—"); });
+    form.questions.forEach((q, i) => { 
+      const typeLabel = QUESTION_TYPES.find(t => t.value === q.type)?.label || "Text";
+      wrap(`Q${i + 1}. ${q.q} [${typeLabel}]`, 11, true); 
+      wrap(q.a || "—"); 
+    });
     dump("Notes", form.sections.notes);
     wrap(`Confirmation: ${form.confirmation ? "Approved by client ✓" : "Pending client approval"}`, 11, true);
     pdf.save(`${(form.title || "brief").replace(/\s+/g, "-")}.pdf`);
@@ -183,6 +196,12 @@ export default function BriefEditor() {
   const shareWhatsApp = () => {
     const summary = `📄 ${form.title}\nClient: ${form.clientName || "—"}\nNiche: ${niche.name}\n\n${form.sections.overview.replace(/^#.*\n/m, "")}\n\nView full brief in GigVorx.`;
     whatsappShare(summary);
+  };
+
+  const getTypeIcon = (type) => {
+    const t = QUESTION_TYPES.find(x => x.value === type);
+    const Icon = t?.icon || Type;
+    return <Icon className="w-3.5 h-3.5" />;
   };
 
   return (
@@ -281,32 +300,79 @@ export default function BriefEditor() {
                   <Button size="sm" variant="outline" onClick={() => setSaveTemplateOpen(true)} className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50">
                     <BookMarked className="w-3.5 h-3.5 mr-1" />Save as template
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={addQuestion} data-testid="brief-add-question" className="h-7 text-xs">
-                    <Plus className="w-3.5 h-3.5 mr-1" />Add question
-                  </Button>
                 </div>
+              </div>
+
+              {/* Add question type buttons */}
+              <div className="flex gap-1.5 flex-wrap mb-4">
+                {QUESTION_TYPES.map(qt => (
+                  <button
+                    key={qt.value}
+                    onClick={() => addQuestion(qt.value)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium hover:bg-muted transition-colors"
+                    title={qt.desc}
+                  >
+                    <qt.icon className="w-3.5 h-3.5" />
+                    {qt.label}
+                  </button>
+                ))}
               </div>
 
               {form.questions.length === 0 && (
                 <div className="text-center py-8 border border-dashed rounded-lg text-muted-foreground text-sm">
                   <p>No questions yet.</p>
-                  <p className="mt-1">Add a question or load a saved template.</p>
+                  <p className="mt-1">Click a question type above to add one.</p>
                 </div>
               )}
 
               <div className="space-y-4">
-                {form.questions.map((q, i) => (
-                  <div key={q.id} className="p-4 rounded-lg border bg-muted/20 group">
-                    <div className="flex items-start gap-2">
-                      <GripVertical className="w-4 h-4 mt-2 text-muted-foreground/40 shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <Input data-testid={`brief-q-${i}`} value={q.q} onChange={(e) => updateQuestion(q.id, { q: e.target.value })} className="font-semibold border-0 bg-transparent px-0 focus-visible:ring-0" placeholder={`Question ${i + 1}`} />
-                        <Textarea data-testid={`brief-a-${i}`} value={q.a} onChange={(e) => updateQuestion(q.id, { a: e.target.value })} rows={2} placeholder="Client's answer..." className="border-0 bg-transparent px-0 focus-visible:ring-0 text-muted-foreground" />
+                {form.questions.map((q, i) => {
+                  const qType = QUESTION_TYPES.find(t => t.value === q.type) || QUESTION_TYPES[0];
+                  return (
+                    <div key={q.id} className="p-4 rounded-lg border bg-muted/20 group">
+                      <div className="flex items-start gap-2">
+                        <GripVertical className="w-4 h-4 mt-2 text-muted-foreground/40 shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs text-muted-foreground">
+                              <qType.icon className="w-3 h-3" />
+                              {qType.label}
+                            </div>
+                            <select
+                              value={q.type || "text"}
+                              onChange={(e) => updateQuestion(q.id, { type: e.target.value })}
+                              className="h-6 rounded border bg-background px-2 text-xs"
+                            >
+                              {QUESTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </div>
+                          <Input
+                            data-testid={`brief-q-${i}`}
+                            value={q.q}
+                            onChange={(e) => updateQuestion(q.id, { q: e.target.value })}
+                            className="font-semibold border-0 bg-transparent px-0 focus-visible:ring-0"
+                            placeholder={`${qType.label} question ${i + 1}`}
+                          />
+                          <Textarea
+                            data-testid={`brief-a-${i}`}
+                            value={q.a}
+                            onChange={(e) => updateQuestion(q.id, { a: e.target.value })}
+                            rows={2}
+                            placeholder={qType.value === "file" ? "Client will upload files here..." : qType.value === "link" ? "Client will share a URL here..." : qType.value === "video" ? "Client will share a video link here..." : qType.value === "image" ? "Client will upload images here..." : "Client's answer..."}
+                            className="border-0 bg-transparent px-0 focus-visible:ring-0 text-muted-foreground"
+                          />
+                        </div>
+                        <button
+                          onClick={() => removeQuestion(q.id)}
+                          data-testid={`brief-remove-q-${i}`}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button onClick={() => removeQuestion(q.id)} data-testid={`brief-remove-q-${i}`} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
@@ -337,7 +403,10 @@ export default function BriefEditor() {
               <div key={k}><h3>{k}</h3><p className="whitespace-pre-wrap text-sm">{v?.replace(/^#.*\n/m, "")}</p></div>
             ))}
             <h3>Questions & Answers</h3>
-            <ol>{form.questions.map(q => <li key={q.id}><b>{q.q}</b><br /><span className="text-muted-foreground">{q.a || "—"}</span></li>)}</ol>
+            <ol>{form.questions.map(q => {
+              const qt = QUESTION_TYPES.find(t => t.value === q.type);
+              return <li key={q.id}><b>{q.q}</b> <span className="text-xs text-muted-foreground">({qt?.label || "Text"})</span><br /><span className="text-muted-foreground">{q.a || "—"}</span></li>;
+            })}</ol>
             <h3>Notes</h3>
             <p className="whitespace-pre-wrap text-sm">{form.sections.notes?.replace(/^#.*\n/m, "")}</p>
             <p className="mt-6 font-semibold">{form.confirmation ? "✅ Approved by client" : "⏳ Pending approval"}</p>
@@ -359,7 +428,7 @@ export default function BriefEditor() {
             <div className="bg-muted/30 rounded-lg p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Questions to save ({form.questions.length}):</p>
               <ul className="space-y-1 max-h-32 overflow-y-auto">
-                {form.questions.map((q, i) => <li key={q.id} className="truncate">{i + 1}. {q.q || "Empty question"}</li>)}
+                {form.questions.map((q, i) => <li key={q.id} className="truncate">{i + 1}. {q.q || "Empty question"} <span className="text-xs text-muted-foreground">({QUESTION_TYPES.find(t => t.value === q.type)?.label || "Text"})</span></li>)}
               </ul>
             </div>
             <div className="flex gap-2">
@@ -390,7 +459,7 @@ export default function BriefEditor() {
                     <p className="font-semibold text-sm">{t.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{t.count} questions · Saved {formatDate(t.createdAt)}</p>
                     <ul className="mt-2 space-y-0.5 max-h-20 overflow-y-auto">
-                      {t.questions.slice(0, 3).map((q, i) => <li key={i} className="text-xs text-muted-foreground truncate">{i + 1}. {q.q}</li>)}
+                      {t.questions.slice(0, 3).map((q, i) => <li key={i} className="text-xs text-muted-foreground truncate">{i + 1}. {q.q} <span className="text-[10px]">({QUESTION_TYPES.find(x => x.value === q.type)?.label || "Text"})</span></li>)}
                       {t.questions.length > 3 && <li className="text-xs text-muted-foreground">+{t.questions.length - 3} more...</li>}
                     </ul>
                   </div>

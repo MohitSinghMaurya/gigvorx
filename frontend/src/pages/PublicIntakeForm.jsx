@@ -13,7 +13,8 @@ import { BrandLogoLarge } from "@/components/Brand";
 import { toast } from "sonner";
 import {
   Send, CheckCircle2, Loader2, Sparkles, FileText,
-  Upload, X, AlertCircle, Mail, Phone, Building2
+  Upload, X, AlertCircle, Mail, Phone, Building2,
+  Type, FileUp, Link as LinkIcon, Video, Image, ExternalLink
 } from "lucide-react";
 
 async function uploadFile(file, bucket = "gigvorx-attachments") {
@@ -29,6 +30,14 @@ async function uploadFile(file, bucket = "gigvorx-attachments") {
   return urlData.publicUrl;
 }
 
+const QUESTION_TYPES = {
+  text: { label: "Text", icon: Type, placeholder: "Your answer..." },
+  file: { label: "File Upload", icon: FileUp, placeholder: "Upload files..." },
+  link: { label: "Link", icon: LinkIcon, placeholder: "Paste a URL..." },
+  video: { label: "Video", icon: Video, placeholder: "Paste a video URL (YouTube, Vimeo, etc.)..." },
+  image: { label: "Image", icon: Image, placeholder: "Upload images..." },
+};
+
 export default function PublicIntakeForm() {
   const { shareToken } = useParams();
   const [searchParams] = useSearchParams();
@@ -43,7 +52,7 @@ export default function PublicIntakeForm() {
   const [clientPhone, setClientPhone] = useState("");
   const [clientCompany, setClientCompany] = useState("");
   const [answers, setAnswers] = useState({});
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState({});
   const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
@@ -65,7 +74,7 @@ export default function PublicIntakeForm() {
             niche: niche.slug,
             title: `${niche.name} Project Brief`,
             description: `Fill out this brief to help us understand your ${niche.name.toLowerCase()} project needs.`,
-            questions: niche.questions.map((q, i) => ({ id: `q-${i}`, text: q })),
+            questions: niche.questions.map((q, i) => ({ id: `q-${i}`, text: q, type: "text" })),
             owner: { name: "GigVorx Freelancer", email: "gigvorx@gmail.com" },
             allowFileUpload: true,
             maxFiles: 3,
@@ -79,7 +88,11 @@ export default function PublicIntakeForm() {
             niche: briefData.niche,
             title: briefData.title,
             description: briefData.sections?.overview?.replace(/^#.*\n/m, "") || "Please fill out this project brief.",
-            questions: briefData.questions?.map((q, i) => ({ id: q.id || `q-${i}`, text: q.q })) || [],
+            questions: briefData.questions?.map((q, i) => ({
+              id: q.id || `q-${i}`,
+              text: q.q,
+              type: q.type || "text",
+            })) || [],
             owner: briefData.owner,
             allowFileUpload: true,
             maxFiles: 5,
@@ -100,25 +113,33 @@ export default function PublicIntakeForm() {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = (questionId, e) => {
     const newFiles = Array.from(e.target.files);
-    const maxFiles = briefConfig?.maxFiles || 3;
-    if (files.length + newFiles.length > maxFiles) {
-      toast.error(`Maximum ${maxFiles} files allowed`);
-      return;
-    }
-    setFiles(prev => [...prev, ...newFiles]);
+    setFiles(prev => ({
+      ...prev,
+      [questionId]: [...(prev[questionId] || []), ...newFiles]
+    }));
   };
 
-  const removeFile = (index) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+  const removeFile = (questionId, index) => {
+    setFiles(prev => ({
+      ...prev,
+      [questionId]: prev[questionId]?.filter((_, i) => i !== index) || []
+    }));
   };
 
   const completionPercent = () => {
     if (!briefConfig) return 0;
     const totalQuestions = briefConfig.questions.length;
     if (totalQuestions === 0) return 0;
-    const answered = Object.values(answers).filter(v => v && v.trim().length > 0).length;
+    let answered = 0;
+    briefConfig.questions.forEach(q => {
+      if (q.type === "text" || q.type === "link" || q.type === "video") {
+        if (answers[q.id]?.trim()) answered++;
+      } else if (q.type === "file" || q.type === "image") {
+        if (files[q.id]?.length > 0) answered++;
+      }
+    });
     const hasContact = clientName && clientEmail;
     return Math.round(((answered + (hasContact ? 1 : 0)) / (totalQuestions + 1)) * 100);
   };
@@ -131,12 +152,23 @@ export default function PublicIntakeForm() {
     try {
       setSubmitting(true);
       setUploadProgress(10);
-      const fileUrls = [];
-      for (let i = 0; i < files.length; i++) {
-        const url = await uploadFile(files[i]);
-        if (url) fileUrls.push({ name: files[i].name, url });
-        setUploadProgress(10 + Math.round(((i + 1) / files.length) * 40));
+
+      // Upload all files from all questions
+      const uploadedFiles = {};
+      const allFileEntries = Object.entries(files);
+      let uploadedCount = 0;
+      const totalFiles = allFileEntries.reduce((sum, [, fileList]) => sum + fileList.length, 0);
+
+      for (const [questionId, fileList] of allFileEntries) {
+        uploadedFiles[questionId] = [];
+        for (const file of fileList) {
+          const url = await uploadFile(file);
+          if (url) uploadedFiles[questionId].push({ name: file.name, url });
+          uploadedCount++;
+          setUploadProgress(10 + Math.round((uploadedCount / totalFiles) * 40));
+        }
       }
+
       setUploadProgress(55);
       const { data: existingClient } = await supabase
         .from("clients")
@@ -165,6 +197,21 @@ export default function PublicIntakeForm() {
         clientId = newClient.id;
       }
       setUploadProgress(75);
+
+      // Build questions with answers
+      const questionsWithAnswers = briefConfig.questions.map(q => {
+        let answer = answers[q.id] || "";
+        if ((q.type === "file" || q.type === "image") && uploadedFiles[q.id]) {
+          answer = JSON.stringify(uploadedFiles[q.id]);
+        }
+        return {
+          id: q.id,
+          q: q.text,
+          a: answer,
+          type: q.type || "text",
+        };
+      });
+
       const responsePayload = {
         user_id: briefConfig.userId,
         client_id: clientId,
@@ -175,21 +222,17 @@ export default function PublicIntakeForm() {
         status: "draft",
         source: "public_intake",
         share_token: shareToken,
-        questions: briefConfig.questions.map(q => ({
-          id: q.id,
-          q: q.text,
-          a: answers[q.id] || "",
-        })),
+        questions: questionsWithAnswers,
         sections: {
           overview: `# Project Overview\n\nSubmitted by ${clientName} (${clientEmail}) via public intake form.`,
           clientDetails: `# Client Details\n\nName: ${clientName}\nEmail: ${clientEmail}\nPhone: ${clientPhone || "—"}\nCompany: ${clientCompany || "—"}`,
-          requirements: `# Requirements\n\n${briefConfig.questions.map(q => `**${q.text}**\n${answers[q.id] || "Not answered"}\n`).join("\n")}`,
+          requirements: `# Requirements\n\n${briefConfig.questions.map(q => `**${q.text}** [${QUESTION_TYPES[q.type]?.label || "Text"}]\n${answers[q.id] || (files[q.id]?.length > 0 ? `${files[q.id].length} file(s) uploaded` : "Not answered")}\n`).join("\n")}`,
           timeline: "# Timeline\n\nTo be discussed.",
           budget: "# Budget\n\nTo be discussed.",
           deliverables: "# Deliverables\n\nTo be defined.",
-          notes: `# Notes\n\nSubmitted via public form. Files attached: ${fileUrls.length}`,
+          notes: `# Notes\n\nSubmitted via public form.`,
         },
-        attachments: fileUrls,
+        attachments: Object.values(uploadedFiles).flat(),
         confirmation: false,
         created_at: new Date().toISOString(),
       };
@@ -198,18 +241,6 @@ export default function PublicIntakeForm() {
       setUploadProgress(100);
       setSubmitted(true);
       toast.success("Brief submitted successfully!");
-      await supabase.from("analytics_events").insert({
-        user_id: briefConfig.userId,
-        event_name: "public_intake_submitted",
-        event_data: {
-          share_token: shareToken,
-          niche: briefConfig.niche,
-          client_email: clientEmail,
-          questions_answered: Object.keys(answers).length,
-          files_attached: fileUrls.length,
-        },
-        created_at: new Date().toISOString(),
-      });
     } catch (err) {
       console.error("Submit failed:", err);
       toast.error(err.message || "Failed to submit. Please try again.");
@@ -236,9 +267,7 @@ export default function PublicIntakeForm() {
           <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">Link Not Found</h2>
           <p className="text-muted-foreground mb-6">{error}</p>
-          <p className="text-sm text-muted-foreground">
-            Powered by <span className="font-semibold text-foreground">GigVorx</span>
-          </p>
+          <p className="text-sm text-muted-foreground">Powered by <span className="font-semibold text-foreground">GigVorx</span></p>
         </Card>
       </div>
     );
@@ -253,20 +282,14 @@ export default function PublicIntakeForm() {
               <CheckCircle2 className="w-8 h-8 text-emerald-600" />
             </div>
             <h2 className="text-2xl font-bold mb-2">Brief Submitted!</h2>
-            <p className="text-muted-foreground mb-2">
-              Thank you, <span className="font-semibold text-foreground">{clientName}</span>.
-            </p>
-            <p className="text-muted-foreground mb-6">
-              {ownerProfile?.business_name || ownerProfile?.name || "The freelancer"} has received your brief and will get back to you shortly.
-            </p>
+            <p className="text-muted-foreground mb-2">Thank you, <span className="font-semibold text-foreground">{clientName}</span>.</p>
+            <p className="text-muted-foreground mb-6">{ownerProfile?.business_name || ownerProfile?.name || "The freelancer"} has received your brief and will get back to you shortly.</p>
             <div className="bg-muted/50 rounded-lg p-4 text-sm text-left space-y-2">
               <p><span className="font-medium">Reference:</span> #{shareToken?.slice(0, 8).toUpperCase()}</p>
               <p><span className="font-medium">Email:</span> {clientEmail}</p>
               <p><span className="font-medium">Project:</span> {briefConfig?.title}</p>
             </div>
-            <p className="text-xs text-muted-foreground mt-6">
-              Powered by <span className="font-semibold">GigVorx</span> — Professional client intake for freelancers
-            </p>
+            <p className="text-xs text-muted-foreground mt-6">Powered by <span className="font-semibold">GigVorx</span> — Professional client intake for freelancers</p>
           </Card>
         </div>
       </div>
@@ -275,6 +298,118 @@ export default function PublicIntakeForm() {
 
   const niche = findNiche(briefConfig?.niche || "web-design");
   const pct = completionPercent();
+
+  const renderQuestionInput = (q) => {
+    const type = q.type || "text";
+    const typeConfig = QUESTION_TYPES[type] || QUESTION_TYPES.text;
+    const TypeIcon = typeConfig.icon;
+
+    if (type === "file") {
+      return (
+        <div className="space-y-2">
+          <div className="border-2 border-dashed border-muted rounded-lg p-4 text-center hover:bg-muted/20 transition-colors">
+            <input type="file" multiple onChange={(e) => handleFileChange(q.id, e)} className="hidden" id={`file-${q.id}`} accept=".pdf,.doc,.docx,.zip" />
+            <label htmlFor={`file-${q.id}`} className="cursor-pointer">
+              <FileUp className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium">Click to upload files</p>
+              <p className="text-xs text-muted-foreground mt-1">PDF, DOC, ZIP up to 10MB each</p>
+            </label>
+          </div>
+          {files[q.id]?.length > 0 && (
+            <div className="space-y-1.5">
+              {files[q.id].map((file, i) => (
+                <div key={i} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="truncate">{file.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+                  </div>
+                  <button onClick={() => removeFile(q.id, i)} className="text-muted-foreground hover:text-destructive shrink-0"><X className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (type === "image") {
+      return (
+        <div className="space-y-2">
+          <div className="border-2 border-dashed border-muted rounded-lg p-4 text-center hover:bg-muted/20 transition-colors">
+            <input type="file" multiple onChange={(e) => handleFileChange(q.id, e)} className="hidden" id={`image-${q.id}`} accept=".png,.jpg,.jpeg,.gif,.webp" />
+            <label htmlFor={`image-${q.id}`} className="cursor-pointer">
+              <Image className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium">Click to upload images</p>
+              <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF, WEBP up to 10MB each</p>
+            </label>
+          </div>
+          {files[q.id]?.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {files[q.id].map((file, i) => (
+                <div key={i} className="relative group">
+                  <div className="aspect-square rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
+                    <Image className="w-6 h-6" />
+                  </div>
+                  <p className="text-[10px] truncate mt-1">{file.name}</p>
+                  <button onClick={() => removeFile(q.id, i)} className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (type === "link") {
+      return (
+        <div className="space-y-2">
+          <Input
+            value={answers[q.id] || ""}
+            onChange={(e) => updateAnswer(q.id, e.target.value)}
+            placeholder={typeConfig.placeholder}
+            className="w-full"
+          />
+          {answers[q.id] && (
+            <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+              <ExternalLink className="w-3 h-3" />Open link
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    if (type === "video") {
+      return (
+        <div className="space-y-2">
+          <Input
+            value={answers[q.id] || ""}
+            onChange={(e) => updateAnswer(q.id, e.target.value)}
+            placeholder={typeConfig.placeholder}
+            className="w-full"
+          />
+          {answers[q.id] && (
+            <a href={answers[q.id]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+              <Video className="w-3 h-3" />Watch video
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    // Default text
+    return (
+      <Textarea
+        value={answers[q.id] || ""}
+        onChange={(e) => updateAnswer(q.id, e.target.value)}
+        placeholder={typeConfig.placeholder}
+        rows={3}
+        className="resize-y"
+      />
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -287,10 +422,7 @@ export default function PublicIntakeForm() {
               <p className="text-[10px] text-muted-foreground">Client Intake Form</p>
             </div>
           </div>
-          <Badge variant="outline" className="text-xs">
-            <Sparkles className="w-3 h-3 mr-1" />
-            {niche.name}
-          </Badge>
+          <Badge variant="outline" className="text-xs"><Sparkles className="w-3 h-3 mr-1" />{niche.name}</Badge>
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 py-8">
@@ -329,42 +461,24 @@ export default function PublicIntakeForm() {
             </div>
             <div className="space-y-6 mb-8">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Project Questions</h3>
-              {briefConfig?.questions.map((q, i) => (
-                <div key={q.id} className="space-y-2">
-                  <Label className="text-sm font-medium leading-relaxed">
-                    <span className="text-muted-foreground mr-2">{i + 1}.</span>{q.text}
-                  </Label>
-                  <Textarea value={answers[q.id] || ""} onChange={(e) => updateAnswer(q.id, e.target.value)} placeholder="Your answer..." rows={3} className="resize-y" />
-                </div>
-              ))}
-            </div>
-            {briefConfig?.allowFileUpload && (
-              <div className="space-y-3 mb-8">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Attachments</h3>
-                <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:bg-muted/20 transition-colors">
-                  <input type="file" multiple onChange={handleFileChange} className="hidden" id="file-upload" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip" />
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm font-medium">Click to upload files</p>
-                    <p className="text-xs text-muted-foreground mt-1">PDF, DOC, PNG, JPG up to 10MB each. Max {briefConfig.maxFiles} files.</p>
-                  </label>
-                </div>
-                {files.length > 0 && (
-                  <div className="space-y-2">
-                    {files.map((file, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg text-sm">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span className="truncate">{file.name}</span>
-                          <span className="text-xs text-muted-foreground shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
-                        </div>
-                        <button onClick={() => removeFile(i)} className="text-muted-foreground hover:text-destructive shrink-0"><X className="w-4 h-4" /></button>
-                      </div>
-                    ))}
+              {briefConfig?.questions.map((q, i) => {
+                const typeConfig = QUESTION_TYPES[q.type] || QUESTION_TYPES.text;
+                const TypeIcon = typeConfig.icon;
+                return (
+                  <div key={q.id} className="space-y-2">
+                    <Label className="text-sm font-medium leading-relaxed flex items-center gap-2">
+                      <span className="text-muted-foreground mr-1">{i + 1}.</span>
+                      {q.text}
+                      <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 h-5">
+                        <TypeIcon className="w-3 h-3 mr-0.5" />
+                        {typeConfig.label}
+                      </Badge>
+                    </Label>
+                    {renderQuestionInput(q)}
                   </div>
-                )}
-              </div>
-            )}
+                );
+              })}
+            </div>
             <div className="pt-6 border-t">
               {submitting && (
                 <div className="mb-4">
