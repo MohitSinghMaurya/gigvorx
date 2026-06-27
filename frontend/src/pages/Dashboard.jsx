@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from " @/lib/AuthContext";
+import { useAuth } from "@/lib/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useCollection } from "@/lib/useCollection";
 import { formatCurrency, formatDate } from "@/lib/format";

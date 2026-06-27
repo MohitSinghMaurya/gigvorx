@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from " @/lib/AuthContext";
+import { useAuth } from "@/lib/AuthContext";
 import { daysFromNow } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/Brand";

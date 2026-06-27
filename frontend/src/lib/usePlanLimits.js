@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useAuth } from " @/lib/AuthContext";
+import { useAuth } from "@/lib/AuthContext";
 import { useCollection } from "@/lib/useCollection";
 
 const LIMITS = {
