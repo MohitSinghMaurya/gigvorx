@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "../lib/supabase";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Textarea } from "../components/ui/textarea";
-import { Label } from "../components/ui/label";
-import { Badge } from "../components/ui/badge";
-import { Card, CardContent } from "../components/ui/card";
-import { Progress } from "../components/ui/progress";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Upload, Image, Link, Video, CheckCircle2, Loader2, Send,
   FileText, Type, List, AlertCircle, X, FileCheck
@@ -347,7 +347,6 @@ export default function PublicIntakeForm() {
           {(brief?.questions || []).map((q, index) => {
             const Icon = questionTypeIcons[q.type] || Type;
             const answer = answers[q.id] || "";
-            const qFiles = files[q.id] || [];
             const qPreviews = filePreviews[q.id] || [];
             const isUploading = uploading[q.id];
 
