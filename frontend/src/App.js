@@ -1,6 +1,6 @@
 import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { CurrencyProvider } from "@/contexts/CurrencyContext";
+import { AuthProvider, useAuth } from "@/lib/AuthContext";
+import { CurrencyProvider } from "@/lib/CurrencyContext";
 import { Toaster } from "@/components/ui/sonner";
 import AppLayout from "@/layouts/AppLayout";
 import PublicLayout from "@/layouts/PublicLayout";
@@ -35,9 +35,9 @@ function LoadingScreen() {
 }
 
 function ProtectedRoute({ children }) {
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
-  if (isLoading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
@@ -45,9 +45,9 @@ function ProtectedRoute({ children }) {
 }
 
 function AdminRoute({ children }) {
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
-  if (isLoading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
@@ -58,8 +58,8 @@ function AdminRoute({ children }) {
 }
 
 function PublicOnly({ children }) {
-  const { user, isLoading } = useAuth();
-  if (isLoading) return null;
+  const { user, loading } = useAuth();
+  if (loading) return null;
   if (user) return <Navigate to="/dashboard" replace />;
   return children;
 }
