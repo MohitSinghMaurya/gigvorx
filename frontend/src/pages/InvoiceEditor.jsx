@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from " @/lib/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useCollection, useInvoiceNumber } from "@/lib/useCollection";
 import { readSetting } from "@/lib/storage";

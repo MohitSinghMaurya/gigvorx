@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from " @/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Brand, BrandLockup } from "@/components/Brand";
 import { Menu, X } from "lucide-react";

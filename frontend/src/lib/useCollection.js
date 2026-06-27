@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from " @/lib/AuthContext";
 import { readList, writeList, uid } from "@/lib/storage";
 import { supabase, isSupabaseEnabled } from "@/lib/supabase";
 
