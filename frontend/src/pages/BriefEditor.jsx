@@ -18,7 +18,7 @@ import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
   Save, Download, Link2, MessageCircle, Plus, X, ChevronDown,
   Type, FileText, List, Upload, Image, Link, Video, CheckCircle2,
-  Loader2, Phone, Mail, Globe, AtSign, User
+  Loader2, Phone, Mail, User
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -292,7 +292,6 @@ export default function BriefEditor() {
   const [saving, setSaving] = useState(false);
   const [loadingBrief, setLoadingBrief] = useState(false);
   const [briefData, setBriefData] = useState(null);
-  const [fillMode, setFillMode] = useState("freelancer");
 
   useEffect(() => {
     if (user?.id) {
@@ -322,10 +321,11 @@ export default function BriefEditor() {
         navigate("/briefs");
         return;
       }
-      setClientName(data.clientName || "");
-      setClientEmail(data.clientEmail || "");
-      setClientPhone(data.clientPhone || "");
-      setProjectTitle(data.projectTitle || "");
+      // Use snake_case column names matching Supabase table
+      setClientName(data.client_name || "");
+      setClientEmail(data.client_email || "");
+      setClientPhone(data.client_phone || "");
+      setProjectTitle(data.title || "");
       setDescription(data.description || "");
       setBudget(data.budget || "");
       setTimeline(data.timeline || "");
@@ -355,12 +355,13 @@ export default function BriefEditor() {
       return;
     }
     setSaving(true);
+    // Use snake_case column names matching Supabase table
     const payload = {
       user_id: user.id,
-      clientName: clientName.trim(),
-      clientEmail: clientEmail.trim(),
-      clientPhone: clientPhone.trim(),
-      projectTitle: projectTitle.trim(),
+      client_name: clientName.trim(),
+      client_email: clientEmail.trim(),
+      client_phone: clientPhone.trim(),
+      title: projectTitle.trim(),
       description: description.trim(),
       budget: budget.trim(),
       timeline: timeline.trim(),
@@ -369,7 +370,7 @@ export default function BriefEditor() {
       answers,
       confirmed,
       currency,
-      updatedAt: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
     try {
       if (editing) {
@@ -386,7 +387,7 @@ export default function BriefEditor() {
           .from("briefs")
           .insert({
             ...payload,
-            createdAt: new Date().toISOString(),
+            created_at: new Date().toISOString(),
             share_token: crypto.randomUUID(),
             share_enabled: true,
           })
@@ -537,13 +538,11 @@ export default function BriefEditor() {
       toast({ title: "Please save the brief first before sharing", variant: "destructive" });
       return;
     }
-    const intakeLink = briefData?.share_token
-      ? `${window.location.origin}/#/intake/${briefData.share_token}`
-      : "";
-    if (!intakeLink) {
+    if (!briefData?.share_token) {
       toast({ title: "Please enable sharing from the Share button first", variant: "destructive" });
       return;
     }
+    const intakeLink = `${window.location.origin}/#/intake/${briefData.share_token}`;
     const text = `Hi ${clientName},\n\nI have prepared a project brief for *${projectTitle}* on GigVorx.\n\nPlease fill in your details using this link:\n${intakeLink}\n\nIt will only take a few minutes. Let me know if you have any questions!`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
@@ -802,7 +801,7 @@ export default function BriefEditor() {
                         <Input
                           value={q.text}
                           onChange={(e) => handleUpdateQuestion(index, { text: e.target.value })}
-                          placeholder={`Enter your question here...`}
+                          placeholder="Enter your question here..."
                           className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                         />
                         {q.type === "select" && (
@@ -835,13 +834,12 @@ export default function BriefEditor() {
             </div>
           </TabsContent>
 
-          {/* FILL ANSWERS TAB - Freelancer fills during call */}
+          {/* FILL ANSWERS TAB */}
           <TabsContent value="fill" className="space-y-6">
             <div className="bg-[#FF6B00]/10 border border-[#FF6B00]/30 rounded-xl p-4">
               <p className="text-[#FF6B00] text-sm font-medium">📞 Freelancer Fill Mode</p>
               <p className="text-white/60 text-xs mt-1">Fill in client answers here during a call. These answers are saved with the brief and included in the PDF.</p>
             </div>
-
             {questions.length === 0 ? (
               <div className="text-center py-12 border border-dashed border-white/10 rounded-xl">
                 <p className="text-white/40 text-sm">No questions yet. Add questions in the Questions tab first.</p>
@@ -931,7 +929,14 @@ export default function BriefEditor() {
       </div>
 
       <ShareBriefDialog
-        brief={{ ...briefData, clientName, clientEmail, projectTitle }}
+        brief={{
+          id: id,
+          share_token: briefData?.share_token,
+          share_enabled: briefData?.share_enabled,
+          clientName,
+          clientEmail,
+          projectTitle,
+        }}
         open={shareOpen}
         onOpenChange={setShareOpen}
       />
