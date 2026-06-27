@@ -15,6 +15,7 @@ import Clients from "@/pages/Clients";
 import ClientForm from "@/pages/ClientForm";
 import Briefs from "@/pages/Briefs";
 import BriefEditor from "@/pages/BriefEditor";
+import BriefResponses from "@/pages/BriefResponses";
 import Invoices from "@/pages/Invoices";
 import InvoiceEditor from "@/pages/InvoiceEditor";
 import Analytics from "@/pages/Analytics";
@@ -83,6 +84,7 @@ function AppRoutes() {
       <Route path="/briefs" element={<ProtectedRoute><Briefs /></ProtectedRoute>} />
       <Route path="/briefs/new" element={<ProtectedRoute><BriefEditor /></ProtectedRoute>} />
       <Route path="/briefs/:id" element={<ProtectedRoute><BriefEditor /></ProtectedRoute>} />
+      <Route path="/briefs/:id/responses" element={<ProtectedRoute><BriefResponses /></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
       <Route path="/invoices/new" element={<ProtectedRoute><InvoiceEditor /></ProtectedRoute>} />
       <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceEditor /></ProtectedRoute>} />

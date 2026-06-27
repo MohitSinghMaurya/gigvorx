@@ -321,7 +321,6 @@ export default function BriefEditor() {
         navigate("/briefs");
         return;
       }
-      // Use snake_case column names matching Supabase table
       setClientName(data.client_name || "");
       setClientEmail(data.client_email || "");
       setClientPhone(data.client_phone || "");
@@ -355,7 +354,6 @@ export default function BriefEditor() {
       return;
     }
     setSaving(true);
-    // Use snake_case column names matching Supabase table
     const payload = {
       user_id: user.id,
       client_name: clientName.trim(),
@@ -574,11 +572,18 @@ export default function BriefEditor() {
               {status}
             </Badge>
           </div>
+
+          {/* ✅ TOP BAR BUTTONS - Responses button added here */}
           <div className="flex items-center gap-2">
             {editing && (
-              <Button variant="outline" size="sm" onClick={() => setShareOpen(true)} className="border-white/10 text-white hover:bg-white/5">
-                <Link2 className="w-4 h-4 mr-1.5" />Share
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => setShareOpen(true)} className="border-white/10 text-white hover:bg-white/5">
+                  <Link2 className="w-4 h-4 mr-1.5" />Share
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/briefs/${id}/responses`)} className="border-green-500/30 text-green-400 hover:bg-green-500/10">
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" />Responses
+                </Button>
+              </>
             )}
             <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="border-white/10 text-white hover:bg-white/5">
               <Download className="w-4 h-4 mr-1.5" />PDF
