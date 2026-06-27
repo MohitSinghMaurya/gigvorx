@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useCurrency } from "@/lib/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,8 +16,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
-  Save, Trash2, Download, Link2, MessageCircle, Eye, Plus, X, ChevronDown,
-  Type, FileText, List, Upload, Image, Link, Video, CheckCircle2
+  Save, Download, Link2, MessageCircle, Plus, X, ChevronDown,
+  Type, FileText, List, Upload, Image, Link, Video, CheckCircle2, Loader2
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -270,7 +271,9 @@ export default function BriefEditor() {
   const [savedTemplates, setSavedTemplates] = useState([]);
   const [activeTab, setActiveTab] = useState("details");
   const [saving, setSaving] = useState(false);
+  const [loadingBrief, setLoadingBrief] = useState(false);
 
+  // Load saved templates from localStorage
   useEffect(() => {
     if (user?.id) {
       const key = `gigvorx_templates_${user.id}`;
@@ -280,6 +283,45 @@ export default function BriefEditor() {
       } catch {}
     }
   }, [user]);
+
+  // Load existing brief from Supabase when editing
+  useEffect(() => {
+    if (editing && user?.id) {
+      loadBrief();
+    }
+  }, [id, user]);
+
+  const loadBrief = async () => {
+    setLoadingBrief(true);
+    try {
+      const { data, error } = await supabase
+        .from("briefs")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (error || !data) {
+        toast({ title: "Brief not found", variant: "destructive" });
+        navigate("/briefs");
+        return;
+      }
+
+      setClientName(data.clientName || "");
+      setClientEmail(data.clientEmail || "");
+      setProjectTitle(data.projectTitle || "");
+      setDescription(data.description || "");
+      setBudget(data.budget || "");
+      setTimeline(data.timeline || "");
+      setStatus(data.status || "draft");
+      setQuestions(data.questions || []);
+      setConfirmed(data.confirmed || false);
+    } catch (err) {
+      toast({ title: "Error loading brief", variant: "destructive" });
+    } finally {
+      setLoadingBrief(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!projectTitle.trim()) {
@@ -296,7 +338,9 @@ export default function BriefEditor() {
     }
 
     setSaving(true);
+
     const payload = {
+      user_id: user.id,
       clientName: clientName.trim(),
       clientEmail: clientEmail.trim(),
       projectTitle: projectTitle.trim(),
@@ -312,8 +356,20 @@ export default function BriefEditor() {
 
     try {
       if (editing) {
+        const { error } = await supabase
+          .from("briefs")
+          .update(payload)
+          .eq("id", id)
+          .eq("user_id", user.id);
+
+        if (error) throw error;
         toast({ title: "Brief updated successfully" });
       } else {
+        const { error } = await supabase
+          .from("briefs")
+          .insert({ ...payload, createdAt: new Date().toISOString() });
+
+        if (error) throw error;
         toast({ title: "Brief created successfully" });
         navigate("/briefs");
       }
@@ -418,7 +474,6 @@ export default function BriefEditor() {
     doc.setFontSize(11);
     const descLines = doc.splitTextToSize(description || "No description provided.", 170);
     doc.text(descLines, 20, 82);
-
     let y = 82 + descLines.length * 5 + 10;
     doc.setFontSize(14);
     doc.text("Questions:", 20, y);
@@ -427,35 +482,27 @@ export default function BriefEditor() {
     questions.forEach((q, i) => {
       const qText = `${i + 1}. [${questionTypeLabels[q.type] || q.type}] ${q.text}`;
       const qLines = doc.splitTextToSize(qText, 170);
-      if (y + qLines.length * 5 > 280) {
-        doc.addPage();
-        y = 20;
-      }
+      if (y + qLines.length * 5 > 280) { doc.addPage(); y = 20; }
       doc.text(qLines, 20, y);
       y += qLines.length * 5 + 3;
       if (q.options) {
         q.options.forEach((opt, j) => {
           const optText = `   ${String.fromCharCode(97 + j)}) ${opt}`;
           const optLines = doc.splitTextToSize(optText, 160);
-          if (y + optLines.length * 5 > 280) {
-            doc.addPage();
-            y = 20;
-          }
+          if (y + optLines.length * 5 > 280) { doc.addPage(); y = 20; }
           doc.text(optLines, 20, y);
           y += optLines.length * 5 + 2;
         });
       }
       y += 3;
     });
-
     doc.save(`${projectTitle || "brief"}_gigvorx.pdf`);
     toast({ title: "PDF downloaded" });
   };
 
   const handleShareWhatsApp = () => {
     const text = `Hi ${clientName}, I have shared a project brief with you on GigVorx: ${projectTitle}. Please check your email or visit your dashboard to review it.`;
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank");
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const handleNicheSelect = (niche) => {
@@ -466,6 +513,14 @@ export default function BriefEditor() {
     }
   };
 
+  if (loadingBrief) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#FF6B00] animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
       <div className="border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur sticky top-0 z-30">
@@ -474,9 +529,7 @@ export default function BriefEditor() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/briefs")} className="text-white/60 hover:text-white hover:bg-white/5">
               Back
             </Button>
-            <h1 className="text-xl font-bold text-white">
-              {editing ? "Edit Brief" : "New Brief"}
-            </h1>
+            <h1 className="text-xl font-bold text-white">{editing ? "Edit Brief" : "New Brief"}</h1>
             <Badge variant="outline" className={status === "approved" ? "border-green-500 text-green-400" : status === "sent" ? "border-blue-500 text-blue-400" : "border-yellow-500 text-yellow-400"}>
               {status}
             </Badge>
@@ -494,7 +547,7 @@ export default function BriefEditor() {
               <MessageCircle className="w-4 h-4 mr-1.5" />WhatsApp
             </Button>
             <Button size="sm" onClick={handleSave} disabled={saving} className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
-              <Save className="w-4 h-4 mr-1.5" />{saving ? "Saving..." : (editing ? "Update" : "Save")}
+              {saving ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-1.5" />{editing ? "Update" : "Save"}</>}
             </Button>
           </div>
         </div>
@@ -520,31 +573,15 @@ export default function BriefEditor() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-white/80">Project Title *</Label>
-                    <Input
-                      value={projectTitle}
-                      onChange={(e) => setProjectTitle(e.target.value)}
-                      placeholder="e.g., E-commerce Website Redesign"
-                      className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
-                    />
+                    <Input value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} placeholder="e.g., E-commerce Website Redesign" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-white/80">Client Name *</Label>
-                    <Input
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      placeholder="e.g., Acme Corp"
-                      className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
-                    />
+                    <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g., Acme Corp" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-white/80">Client Email</Label>
-                    <Input
-                      type="email"
-                      value={clientEmail}
-                      onChange={(e) => setClientEmail(e.target.value)}
-                      placeholder="client@example.com"
-                      className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
-                    />
+                    <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.com" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-white/80">Status</Label>
@@ -563,32 +600,16 @@ export default function BriefEditor() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-white/80">Project Description</Label>
-                  <Textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the project scope, goals, and any specific requirements..."
-                    rows={4}
-                    className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 resize-none"
-                  />
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the project scope, goals, and any specific requirements..." rows={4} className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 resize-none" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-white/80">Budget ({currency})</Label>
-                    <Input
-                      value={budget}
-                      onChange={(e) => setBudget(e.target.value)}
-                      placeholder={`e.g., 50,000 ${currency === "INR" ? "Rs." : "$"}`}
-                      className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
-                    />
+                    <Input value={budget} onChange={(e) => setBudget(e.target.value)} placeholder={`e.g., 50,000 ${currency === "INR" ? "Rs." : "$"}`} className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-white/80">Timeline</Label>
-                    <Input
-                      value={timeline}
-                      onChange={(e) => setTimeline(e.target.value)}
-                      placeholder="e.g., 2 weeks, by Dec 31"
-                      className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
-                    />
+                    <Input value={timeline} onChange={(e) => setTimeline(e.target.value)} placeholder="e.g., 2 weeks, by Dec 31" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20" />
                   </div>
                 </div>
               </CardContent>
@@ -627,15 +648,8 @@ export default function BriefEditor() {
                       {Object.entries(questionTypeLabels).map(([type, label]) => {
                         const Icon = questionTypeIcons[type];
                         return (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => handleAddQuestion(type)}
-                            className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#FF6B00]/50 transition-all text-left"
-                          >
-                            <div className={`p-2 rounded-lg ${questionTypeColors[type]}`}>
-                              <Icon className="w-4 h-4" />
-                            </div>
+                          <button key={type} type="button" onClick={() => handleAddQuestion(type)} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#FF6B00]/50 transition-all text-left">
+                            <div className={`p-2 rounded-lg ${questionTypeColors[type]}`}><Icon className="w-4 h-4" /></div>
                             <div>
                               <div className="text-white font-medium text-sm">{label}</div>
                               <div className="text-white/40 text-xs">
@@ -679,12 +693,8 @@ export default function BriefEditor() {
                                 <div className="text-white/40 text-xs">{t.questions.length} questions - {new Date(t.createdAt).toLocaleDateString()}</div>
                               </div>
                               <div className="flex gap-2">
-                                <Button size="sm" variant="ghost" onClick={() => handleLoadTemplate(t)} className="text-[#FF6B00] hover:text-[#FF6B00] hover:bg-[#FF6B00]/10">
-                                  Load
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => handleDeleteTemplate(t.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                                  <X className="w-4 h-4" />
-                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => handleLoadTemplate(t)} className="text-[#FF6B00] hover:text-[#FF6B00] hover:bg-[#FF6B00]/10">Load</Button>
+                                <Button size="sm" variant="ghost" onClick={() => handleDeleteTemplate(t.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10"><X className="w-4 h-4" /></Button>
                               </div>
                             </div>
                           ))}
@@ -716,8 +726,7 @@ export default function BriefEditor() {
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <Badge className={`${questionTypeColors[q.type] || questionTypeColors.text} text-xs font-medium`}>
-                              <Icon className="w-3 h-3 mr-1" />
-                              {questionTypeLabels[q.type] || q.type}
+                              <Icon className="w-3 h-3 mr-1" />{questionTypeLabels[q.type] || q.type}
                             </Badge>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -729,13 +738,8 @@ export default function BriefEditor() {
                                 {Object.entries(questionTypeLabels).map(([type, label]) => {
                                   const TypeIcon = questionTypeIcons[type];
                                   return (
-                                    <DropdownMenuItem
-                                      key={type}
-                                      onClick={() => handleUpdateQuestion(index, { type, options: type === "select" ? (q.options || ["Option 1", "Option 2"]) : undefined })}
-                                      className="text-white hover:bg-white/10 cursor-pointer"
-                                    >
-                                      <TypeIcon className="w-3.5 h-3.5 mr-2" />
-                                      {label}
+                                    <DropdownMenuItem key={type} onClick={() => handleUpdateQuestion(index, { type, options: type === "select" ? (q.options || ["Option 1", "Option 2"]) : undefined })} className="text-white hover:bg-white/10 cursor-pointer">
+                                      <TypeIcon className="w-3.5 h-3.5 mr-2" />{label}
                                     </DropdownMenuItem>
                                   );
                                 })}
@@ -751,36 +755,19 @@ export default function BriefEditor() {
                         </div>
 
                         {q.type === "select" && (
-                          <div className="space-y-2 pl-0">
+                          <div className="space-y-2">
                             <Label className="text-white/60 text-xs">Options (client will pick one)</Label>
                             <div className="space-y-2">
                               {(q.options || []).map((opt, oIndex) => (
                                 <div key={oIndex} className="flex items-center gap-2">
                                   <div className="w-4 h-4 rounded-full border border-white/20 flex-shrink-0" />
-                                  <Input
-                                    value={opt}
-                                    onChange={(e) => handleUpdateOption(index, oIndex, e.target.value)}
-                                    placeholder={`Option ${oIndex + 1}`}
-                                    className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 text-sm focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDeleteOption(index, oIndex)}
-                                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 px-2"
-                                  >
+                                  <Input value={opt} onChange={(e) => handleUpdateOption(index, oIndex, e.target.value)} placeholder={`Option ${oIndex + 1}`} className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 text-sm focus:border-[#FF6B00] focus:ring-[#FF6B00]/20" />
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteOption(index, oIndex)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 px-2">
                                     <X className="w-3.5 h-3.5" />
                                   </Button>
                                 </div>
                               ))}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleAddOption(index)}
-                                className="text-[#FF6B00] hover:text-[#FF6B00] hover:bg-[#FF6B00]/10 text-xs"
-                              >
+                              <Button type="button" variant="ghost" size="sm" onClick={() => handleAddOption(index)} className="text-[#FF6B00] hover:text-[#FF6B00] hover:bg-[#FF6B00]/10 text-xs">
                                 <Plus className="w-3.5 h-3.5 mr-1" />Add Option
                               </Button>
                             </div>
@@ -789,16 +776,8 @@ export default function BriefEditor() {
 
                         <div className="bg-[#0a0a0a] border border-white/5 rounded-lg p-3">
                           <div className="text-xs text-white/30 mb-2">Client will see:</div>
-                          {q.type === "text" && (
-                            <div className="h-9 bg-[#1a1a1a] border border-white/10 rounded-md flex items-center px-3">
-                              <span className="text-white/20 text-sm">Single line answer...</span>
-                            </div>
-                          )}
-                          {q.type === "long" && (
-                            <div className="h-20 bg-[#1a1a1a] border border-white/10 rounded-md p-3">
-                              <span className="text-white/20 text-sm">Detailed answer...</span>
-                            </div>
-                          )}
+                          {q.type === "text" && <div className="h-9 bg-[#1a1a1a] border border-white/10 rounded-md flex items-center px-3"><span className="text-white/20 text-sm">Single line answer...</span></div>}
+                          {q.type === "long" && <div className="h-20 bg-[#1a1a1a] border border-white/10 rounded-md p-3"><span className="text-white/20 text-sm">Detailed answer...</span></div>}
                           {q.type === "select" && (
                             <div className="space-y-1.5">
                               {(q.options || ["Option 1", "Option 2"]).map((opt, i) => (
@@ -809,43 +788,17 @@ export default function BriefEditor() {
                               ))}
                             </div>
                           )}
-                          {q.type === "file" && (
-                            <div className="h-16 border-2 border-dashed border-white/10 rounded-md flex items-center justify-center gap-2">
-                              <Upload className="w-4 h-4 text-white/30" />
-                              <span className="text-white/30 text-sm">Drop files here or click to upload</span>
-                            </div>
-                          )}
-                          {q.type === "image" && (
-                            <div className="h-16 border-2 border-dashed border-white/10 rounded-md flex items-center justify-center gap-2">
-                              <Image className="w-4 h-4 text-white/30" />
-                              <span className="text-white/30 text-sm">Drop images here or click to upload</span>
-                            </div>
-                          )}
-                          {q.type === "link" && (
-                            <div className="h-9 bg-[#1a1a1a] border border-white/10 rounded-md flex items-center px-3 gap-2">
-                              <Link className="w-3.5 h-3.5 text-white/20" />
-                              <span className="text-white/20 text-sm">https://example.com</span>
-                            </div>
-                          )}
-                          {q.type === "video" && (
-                            <div className="h-9 bg-[#1a1a1a] border border-white/10 rounded-md flex items-center px-3 gap-2">
-                              <Video className="w-3.5 h-3.5 text-white/20" />
-                              <span className="text-white/20 text-sm">https://youtube.com/...</span>
-                            </div>
-                          )}
+                          {q.type === "file" && <div className="h-16 border-2 border-dashed border-white/10 rounded-md flex items-center justify-center gap-2"><Upload className="w-4 h-4 text-white/30" /><span className="text-white/30 text-sm">Drop files here or click to upload</span></div>}
+                          {q.type === "image" && <div className="h-16 border-2 border-dashed border-white/10 rounded-md flex items-center justify-center gap-2"><Image className="w-4 h-4 text-white/30" /><span className="text-white/30 text-sm">Drop images here or click to upload</span></div>}
+                          {q.type === "link" && <div className="h-9 bg-[#1a1a1a] border border-white/10 rounded-md flex items-center px-3 gap-2"><Link className="w-3.5 h-3.5 text-white/20" /><span className="text-white/20 text-sm">https://example.com</span></div>}
+                          {q.type === "video" && <div className="h-9 bg-[#1a1a1a] border border-white/10 rounded-md flex items-center px-3 gap-2"><Video className="w-3.5 h-3.5 text-white/20" /><span className="text-white/20 text-sm">https://youtube.com/...</span></div>}
                         </div>
                       </div>
 
                       <div className="flex flex-col gap-1">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleMoveQuestion(index, -1)} disabled={index === 0} className="text-white/30 hover:text-white hover:bg-white/5 h-7 px-2">
-                          Up
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleMoveQuestion(index, 1)} disabled={index === questions.length - 1} className="text-white/30 hover:text-white hover:bg-white/5 h-7 px-2">
-                          Down
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteQuestion(index)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 px-2">
-                          <X className="w-4 h-4" />
-                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => handleMoveQuestion(index, -1)} disabled={index === 0} className="text-white/30 hover:text-white hover:bg-white/5 h-7 px-2">Up</Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => handleMoveQuestion(index, 1)} disabled={index === questions.length - 1} className="text-white/30 hover:text-white hover:bg-white/5 h-7 px-2">Down</Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteQuestion(index)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 px-2"><X className="w-4 h-4" /></Button>
                       </div>
                     </div>
                   </div>
@@ -857,24 +810,15 @@ export default function BriefEditor() {
           <TabsContent value="templates" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Object.entries(nicheTemplates).map(([niche, template]) => (
-                <button
-                  key={niche}
-                  type="button"
-                  onClick={() => handleNicheSelect(niche)}
-                  className="p-4 rounded-xl bg-[#111] border border-white/10 hover:border-[#FF6B00]/50 hover:bg-[#161616] transition-all text-left group"
-                >
+                <button key={niche} type="button" onClick={() => handleNicheSelect(niche)} className="p-4 rounded-xl bg-[#111] border border-white/10 hover:border-[#FF6B00]/50 hover:bg-[#161616] transition-all text-left group">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-white font-medium group-hover:text-[#FF6B00] transition-colors">{niche}</h3>
                     <Badge variant="outline" className="border-white/10 text-white/50 text-xs">{template.length} Qs</Badge>
                   </div>
-                  <p className="text-white/40 text-xs">
-                    {template.slice(0, 3).map(q => q.text).join(" - ").substring(0, 80)}...
-                  </p>
+                  <p className="text-white/40 text-xs">{template.slice(0, 3).map(q => q.text).join(" - ").substring(0, 80)}...</p>
                   <div className="flex flex-wrap gap-1 mt-3">
                     {Array.from(new Set(template.map(q => q.type))).slice(0, 4).map(type => (
-                      <span key={type} className={`text-[10px] px-1.5 py-0.5 rounded ${questionTypeColors[type]}`}>
-                        {questionTypeLabels[type]}
-                      </span>
+                      <span key={type} className={`text-[10px] px-1.5 py-0.5 rounded ${questionTypeColors[type]}`}>{questionTypeLabels[type]}</span>
                     ))}
                   </div>
                 </button>
