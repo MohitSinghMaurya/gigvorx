@@ -4,7 +4,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, User, Mail, Phone, MessageCircle,
   CheckCircle2, Clock, FileText, Loader2, Download
@@ -18,6 +17,43 @@ function formatDate(dateStr) {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit"
   });
+}
+function AnswerDisplay({ q, answer }) {
+  if (!answer) {
+    return <p className="text-white/20 text-sm italic">No answer provided</p>;
+  }
+
+  try {
+    const parsed = JSON.parse(answer);
+    if (Array.isArray(parsed)) {
+      return (
+        <div className="space-y-1">
+          {parsed.map((f, fi) => (
+            <button
+              key={fi}
+              onClick={() => window.open(f.url, "_blank")}
+              className="text-[#FF6B00] text-sm underline block text-left"
+            >
+              📎 {f.name}
+            </button>
+          ))}
+        </div>
+      );
+    }
+  } catch (e) {}
+
+  if (q.type === "link" || q.type === "video") {
+    return (
+      <button
+        onClick={() => window.open(answer, "_blank")}
+        className="text-[#FF6B00] text-sm underline break-all text-left w-full"
+      >
+        {answer}
+      </button>
+    );
+  }
+
+  return <p className="text-white text-sm">{answer}</p>;
 }
 
 export default function BriefResponses() {
@@ -39,7 +75,6 @@ export default function BriefResponses() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch brief
       const { data: briefData, error: briefError } = await supabase
         .from("briefs")
         .select("*")
@@ -54,7 +89,6 @@ export default function BriefResponses() {
       }
       setBrief(briefData);
 
-      // Fetch responses
       const { data: responsesData, error: responsesError } = await supabase
         .from("brief_responses")
         .select("*")
@@ -64,8 +98,7 @@ export default function BriefResponses() {
       if (responsesError) throw responsesError;
       setResponses(responsesData || []);
 
-      // Auto select first response
-      if (responsesData?.length > 0) {
+      if (responsesData && responsesData.length > 0) {
         setSelectedResponse(responsesData[0]);
       }
     } catch (err) {
@@ -103,14 +136,18 @@ export default function BriefResponses() {
       const answer = answers[q.id] || "No answer provided";
       const qText = `${i + 1}. ${q.text}`;
       const qLines = doc.splitTextToSize(qText, 170);
-      if (y + qLines.length * 5 > 280) { doc.addPage(); y = 20; }
-      doc.setFont(undefined, "bold");
+      if (y + qLines.length * 5 > 280) {
+        doc.addPage();
+        y = 20;
+      }
       doc.text(qLines, 20, y);
       y += qLines.length * 5 + 2;
-      doc.setFont(undefined, "normal");
       doc.setTextColor(80, 80, 80);
-      const aLines = doc.splitTextToSize(`→ ${answer}`, 165);
-      if (y + aLines.length * 5 > 280) { doc.addPage(); y = 20; }
+      const aLines = doc.splitTextToSize(`Answer: ${answer}`, 165);
+      if (y + aLines.length * 5 > 280) {
+        doc.addPage();
+        y = 20;
+      }
       doc.text(aLines, 25, y);
       doc.setTextColor(0, 0, 0);
       y += aLines.length * 5 + 5;
@@ -129,17 +166,23 @@ export default function BriefResponses() {
   }
 
   return (
-    <div className="min-h-[100vh] bg-[#0a0a0a] text-white pb-20">
-      {/* Header */}
+    <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
       <div className="border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/briefs/${id}`)} className="text-white/60 hover:text-white hover:bg-white/5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/briefs/${id}`)}
+              className="text-white/60 hover:text-white hover:bg-white/5"
+            >
               <ArrowLeft className="w-4 h-4 mr-1.5" />Back
             </Button>
             <div>
               <h1 className="text-lg font-bold text-white">{brief?.title || "Brief"}</h1>
-              <p className="text-white/40 text-xs">{responses.length} response{responses.length !== 1 ? "s" : ""} received</p>
+              <p className="text-white/40 text-xs">
+                {responses.length} response{responses.length !== 1 ? "s" : ""} received
+              </p>
             </div>
           </div>
           <Button
@@ -155,13 +198,14 @@ export default function BriefResponses() {
 
       <div className="max-w-6xl mx-auto px-4 py-6">
         {responses.length === 0 ? (
-          /* No responses yet */
           <div className="text-center py-20">
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
               <Clock className="w-8 h-8 text-white/30" />
             </div>
             <h2 className="text-white font-semibold text-xl mb-2">No responses yet</h2>
-            <p className="text-white/50 mb-6">Share the intake form link with your client and responses will appear here.</p>
+            <p className="text-white/50 mb-6">
+              Share the intake form link with your client and responses will appear here.
+            </p>
             {brief?.share_token && (
               <div className="max-w-md mx-auto bg-[#111] border border-white/10 rounded-xl p-4 text-left space-y-3">
                 <p className="text-white/60 text-sm font-medium">Intake form link:</p>
@@ -171,7 +215,9 @@ export default function BriefResponses() {
                 <Button
                   className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white"
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/#/intake/${brief.share_token}`);
+                    navigator.clipboard.writeText(
+                      `${window.location.origin}/#/intake/${brief.share_token}`
+                    );
                     toast.success("Link copied!");
                   }}
                 >
@@ -182,7 +228,6 @@ export default function BriefResponses() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left — Response list */}
             <div className="space-y-3">
               <h2 className="text-white/60 text-xs font-semibold uppercase tracking-wider mb-3">
                 Submissions ({responses.length})
@@ -202,7 +247,9 @@ export default function BriefResponses() {
                       <User className="w-4 h-4 text-[#FF6B00]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white font-medium text-sm truncate">{r.client_name || "Unknown"}</p>
+                      <p className="text-white font-medium text-sm truncate">
+                        {r.client_name || "Unknown"}
+                      </p>
                       <p className="text-white/40 text-xs truncate">{r.client_email || ""}</p>
                     </div>
                     <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
@@ -212,16 +259,13 @@ export default function BriefResponses() {
               ))}
             </div>
 
-            {/* Right — Response detail */}
             {selectedResponse && (
               <div className="lg:col-span-2 space-y-4">
-                {/* Client info card */}
                 <Card className="bg-[#111] border-white/10">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-white text-base flex items-center gap-2">
-                        <User className="w-4 h-4 text-[#FF6B00]" />
-                        Client Details
+                        <User className="w-4 h-4 text-[#FF6B00]" />Client Details
                       </CardTitle>
                       <div className="flex gap-2">
                         <Button
@@ -249,31 +293,38 @@ export default function BriefResponses() {
                         <User className="w-4 h-4 text-white/30" />
                         <div>
                           <p className="text-white/40 text-xs">Name</p>
-                          <p className="text-white text-sm font-medium">{selectedResponse.client_name || "—"}</p>
+                          <p className="text-white text-sm font-medium">
+                            {selectedResponse.client_name || "—"}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Mail className="w-4 h-4 text-white/30" />
                         <div>
                           <p className="text-white/40 text-xs">Email</p>
-                          <p className="text-white text-sm font-medium">{selectedResponse.client_email || "—"}</p>
+                          <p className="text-white text-sm font-medium">
+                            {selectedResponse.client_email || "—"}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Phone className="w-4 h-4 text-white/30" />
                         <div>
                           <p className="text-white/40 text-xs">Phone</p>
-                          <p className="text-white text-sm font-medium">{selectedResponse.client_phone || "—"}</p>
+                          <p className="text-white text-sm font-medium">
+                            {selectedResponse.client_phone || "—"}
+                          </p>
                         </div>
                       </div>
                     </div>
                     <div className="mt-3 pt-3 border-t border-white/10">
-                      <p className="text-white/30 text-xs">Submitted on {formatDate(selectedResponse.created_at)}</p>
+                      <p className="text-white/30 text-xs">
+                        Submitted on {formatDate(selectedResponse.created_at)}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Answers */}
                 <div className="space-y-3">
                   <h3 className="text-white/60 text-xs font-semibold uppercase tracking-wider">
                     Answers ({brief?.questions?.length || 0} questions)
@@ -289,49 +340,9 @@ export default function BriefResponses() {
                             </span>
                             <div className="flex-1">
                               <p className="text-white/70 text-sm font-medium mb-2">{q.text}</p>
-                              {answer ? (
-                                <div className="bg-[#1a1a1a] rounded-lg p-3 border border-white/5">
-                                  {(() => {
-                                    // Try parse as JSON (for file uploads)
-                                    try {
-                                      const parsed = JSON.parse(answer);
-                                      if (Array.isArray(parsed)) {
-                                        return (
-                                          <div className="space-y-1">
-                                            {parsed.map((f, fi) => (
-                                              
-                                                key={fi}
-                                                href={f.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-[#FF6B00] text-sm underline block"
-                                              >
-                                                📎 {f.name}
-                                              </a>
-                                            ))}
-                                          </div>
-                                        );
-                                      }
-                                    } catch {}
-                                    // Regular text answer
-                                    if (q.type === "link" || q.type === "video") {
-                                      return (
-                                        
-                                          href={answer}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-[#FF6B00] text-sm underline break-all"
-                                        >
-                                          {answer}
-                                        </a>
-                                      );
-                                    }
-                                    return <p className="text-white text-sm">{answer}</p>;
-                                  })()}
-                                </div>
-                              ) : (
-                                <p className="text-white/20 text-sm italic">No answer provided</p>
-                              )}
+                              <div className="bg-[#1a1a1a] rounded-lg p-3 border border-white/5">
+                                <AnswerDisplay q={q} answer={answer} />
+                              </div>
                             </div>
                           </div>
                         </CardContent>
