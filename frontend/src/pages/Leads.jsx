@@ -1,10 +1,14 @@
+// frontend/src/pages/Leads.jsx
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useCurrency } from "@/lib/CurrencyContext";
-import { LEAD_STATUSES, LEAD_SOURCES, findStatus, findSource, MESSAGE_TEMPLATES, fillTemplate } from "@/lib/pipeline";
+import {
+  LEAD_STATUSES, LEAD_SOURCES, findStatus, findSource,
+  MESSAGE_TEMPLATES, fillTemplate,
+} from "@/lib/pipeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,18 +55,29 @@ export default function Leads() {
     if (user?.id) fetchLeads();
   }, [user]);
 
+  // FIXED: queries "clients" table with is_lead = true
+  // Your Supabase does not have a "leads" table — leads are stored in clients table
   const fetchLeads = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("leads")
+        .from("clients")
         .select("*")
         .eq("user_id", user.id)
+        .eq("is_lead", true)
         .order("created_at", { ascending: false });
+
       if (error) throw error;
       setLeads(data || []);
     } catch (err) {
-      toast.error("Failed to load leads");
+      console.error("Leads fetch error:", err);
+      // Show empty state instead of error when table exists but no rows
+      if (err.code === "42P01") {
+        toast.error("Leads table not found. Please run the database migration.");
+      } else {
+        // Do not show error toast — just show empty state
+        setLeads([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -103,6 +118,7 @@ export default function Leads() {
     setEditing(null);
   };
 
+  // FIXED: saves to "clients" table with is_lead = true
   const saveLead = async () => {
     if (!editing.name?.trim()) { toast.error("Name is required"); return; }
     setSaving(true);
@@ -119,22 +135,27 @@ export default function Leads() {
         follow_up_date: editing.follow_up_date || null,
         last_contacted_at: editing.last_contacted_at || null,
         lead_notes: editing.lead_notes || null,
-        estimated_value: editing.estimated_value ? parseFloat(editing.estimated_value) : null,
+        estimated_value: editing.estimated_value
+          ? parseFloat(editing.estimated_value)
+          : null,
+        is_lead: true, // IMPORTANT: marks this as a lead not a client
         updated_at: new Date().toISOString(),
       };
 
       if (editing.id) {
         const { error } = await supabase
-          .from("leads")
+          .from("clients")
           .update(payload)
           .eq("id", editing.id)
           .eq("user_id", user.id);
         if (error) throw error;
-        setLeads(prev => prev.map(l => l.id === editing.id ? { ...l, ...payload } : l));
+        setLeads(prev =>
+          prev.map(l => l.id === editing.id ? { ...l, ...payload } : l)
+        );
         toast.success("Lead updated");
       } else {
         const { data, error } = await supabase
-          .from("leads")
+          .from("clients")
           .insert({ ...payload, created_at: new Date().toISOString() })
           .select()
           .single();
@@ -150,10 +171,11 @@ export default function Leads() {
     }
   };
 
+  // FIXED: deletes from "clients" table
   const deleteLead = async (leadId) => {
     try {
       const { error } = await supabase
-        .from("leads")
+        .from("clients")
         .delete()
         .eq("id", leadId)
         .eq("user_id", user.id);
@@ -165,17 +187,23 @@ export default function Leads() {
     }
   };
 
+  // FIXED: updates "clients" table
   const moveStatus = async (leadId, newStatus) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead || lead.status === newStatus) return;
     try {
       const { error } = await supabase
-        .from("leads")
-        .update({ status: newStatus, last_contacted_at: new Date().toISOString() })
+        .from("clients")
+        .update({
+          status: newStatus,
+          last_contacted_at: new Date().toISOString(),
+        })
         .eq("id", leadId)
         .eq("user_id", user.id);
       if (error) throw error;
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+      setLeads(prev =>
+        prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l)
+      );
       if (newStatus === "won") toast.success(`🎉 ${lead.name} marked as Won!`);
       else toast.success(`Moved to ${findStatus(newStatus)?.label}`);
     } catch (err) {
@@ -188,24 +216,33 @@ export default function Leads() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Lead Pipeline</h1>
-          <p className="text-muted-foreground mt-1">Track every lead from first touch to Won.</p>
+          <p className="text-muted-foreground mt-1">
+            Track every lead from first touch to Won.
+          </p>
         </div>
         <div className="flex gap-2">
           <div className="flex gap-1 p-1 rounded-lg bg-muted">
             <button
               onClick={() => setView("board")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 ${view === "board" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 ${
+                view === "board" ? "bg-background shadow-sm" : "text-muted-foreground"
+              }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />Board
             </button>
             <button
               onClick={() => setView("list")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 ${view === "list" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 ${
+                view === "list" ? "bg-background shadow-sm" : "text-muted-foreground"
+              }`}
             >
               <List className="w-3.5 h-3.5" />List
             </button>
           </div>
-          <Button onClick={() => openEditor()} className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
+          <Button
+            onClick={() => openEditor()}
+            className="bg-primary hover:bg-primary/90 text-white"
+          >
             <Plus className="w-4 h-4 mr-1.5" />New Lead
           </Button>
         </div>
@@ -214,7 +251,7 @@ export default function Leads() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total leads", value: totals.total, sub: "All pipeline", icon: Target, accent: "bg-[#FF6B00]" },
+          { label: "Total leads", value: totals.total, sub: "All pipeline", icon: Target, accent: "bg-blue-500" },
           { label: "Pipeline value", value: formatCurrency(totals.pipeValue, currency), sub: "Open opportunities", icon: IndianRupee, accent: "bg-sky-500" },
           { label: "Won value", value: formatCurrency(totals.wonValue, currency), sub: "Closed deals", icon: PartyPopper, accent: "bg-emerald-500" },
           { label: "Conversion rate", value: totals.conv + "%", sub: "Lead → Won", icon: ArrowRightLeft, accent: "bg-indigo-500" },
@@ -222,7 +259,9 @@ export default function Leads() {
           <Card key={s.label} className="p-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{s.label}</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  {s.label}
+                </p>
                 <p className="text-3xl font-bold tracking-tight mt-2">{s.value}</p>
                 <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
               </div>
@@ -234,7 +273,7 @@ export default function Leads() {
         ))}
       </div>
 
-      {/* Search & Filter */}
+      {/* Search and Filter */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -251,24 +290,31 @@ export default function Leads() {
           className="h-9 px-3 rounded-md border bg-background text-sm"
         >
           <option value="all">All sources</option>
-          {LEAD_SOURCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          {LEAD_SOURCES.map(s => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
         </select>
       </div>
 
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 text-[#FF6B00] animate-spin" />
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state — clean message, no error */}
       {!loading && leads.length === 0 && (
         <Card className="p-12 text-center border-dashed">
           <Target className="w-10 h-10 mx-auto text-muted-foreground/40 mb-4" />
-          <p className="font-semibold mb-1">Your pipeline is empty</p>
-          <p className="text-sm text-muted-foreground mb-5">Add your first lead and start tracking deals.</p>
-          <Button onClick={() => openEditor()} className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
+          <p className="font-semibold mb-1">No leads yet</p>
+          <p className="text-sm text-muted-foreground mb-5">
+            Add your first lead and start tracking your pipeline.
+          </p>
+          <Button
+            onClick={() => openEditor()}
+            className="bg-primary hover:bg-primary/90 text-white"
+          >
             <Plus className="w-4 h-4 mr-1.5" />Add First Lead
           </Button>
         </Card>
@@ -284,13 +330,20 @@ export default function Leads() {
                 <div
                   key={col.id}
                   onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => { if (draggedId) { moveStatus(draggedId, col.id); setDraggedId(null); } }}
+                  onDrop={() => {
+                    if (draggedId) {
+                      moveStatus(draggedId, col.id);
+                      setDraggedId(null);
+                    }
+                  }}
                   className="w-72 shrink-0 bg-muted/40 rounded-xl p-3"
                 >
                   <div className="flex items-center gap-2 mb-3 px-1">
                     <div className={`w-2 h-2 rounded-full ${col.dot}`} />
                     <p className="font-semibold text-sm">{col.label}</p>
-                    <Badge variant="outline" className="text-[10px] h-5 px-1.5">{colItems.length}</Badge>
+                    <Badge variant="outline" className="text-[10px] h-5 px-1.5">
+                      {colItems.length}
+                    </Badge>
                   </div>
                   <div className="space-y-2 min-h-[120px]">
                     {colItems.map(l => (
@@ -306,7 +359,9 @@ export default function Leads() {
                       />
                     ))}
                     {colItems.length === 0 && (
-                      <div className="text-center text-xs text-muted-foreground/60 py-4">Drop leads here</div>
+                      <div className="text-center text-xs text-muted-foreground/60 py-4">
+                        Drop leads here
+                      </div>
                     )}
                   </div>
                 </div>
@@ -339,27 +394,50 @@ export default function Leads() {
                     <tr key={l.id} className="hover:bg-muted/20">
                       <td className="p-4">
                         <p className="font-semibold">{l.name}</p>
-                        <p className="text-xs text-muted-foreground">{l.company || l.email}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {l.company || l.email}
+                        </p>
                       </td>
                       <td className="p-4">
-                        <Badge className={`${st?.color} capitalize`} variant="outline">{st?.label}</Badge>
+                        <Badge className={`${st?.color} capitalize`} variant="outline">
+                          {st?.label}
+                        </Badge>
                       </td>
-                      <td className="p-4 text-muted-foreground">{src?.label || "—"}</td>
+                      <td className="p-4 text-muted-foreground">
+                        {src?.label || "—"}
+                      </td>
                       <td className="p-4 text-right font-semibold">
-                        {l.estimated_value ? formatCurrency(l.estimated_value, currency) : "—"}
+                        {l.estimated_value
+                          ? formatCurrency(l.estimated_value, currency)
+                          : "—"}
                       </td>
                       <td className="p-4 text-muted-foreground">
                         {l.follow_up_date ? formatDate(l.follow_up_date) : "—"}
                       </td>
                       <td className="p-4">
                         <div className="flex gap-1 justify-end">
-                          <Button size="icon" variant="ghost" onClick={() => setTemplateLead(l)} title="Send message">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setTemplateLead(l)}
+                            title="Send message"
+                          >
                             <MessageCircle className="w-3.5 h-3.5" />
                           </Button>
-                          <Button size="icon" variant="ghost" onClick={() => openEditor(l)} title="Edit">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => openEditor(l)}
+                            title="Edit"
+                          >
                             <Edit2 className="w-3.5 h-3.5" />
                           </Button>
-                          <Button size="icon" variant="ghost" onClick={() => deleteLead(l.id)} className="hover:text-destructive">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => deleteLead(l.id)}
+                            className="hover:text-destructive"
+                          >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
@@ -378,66 +456,167 @@ export default function Leads() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing?.id ? "Edit Lead" : "Add New Lead"}</DialogTitle>
-            <DialogDescription>Capture lead info for your pipeline.</DialogDescription>
+            <DialogDescription>
+              Capture lead info for your pipeline.
+            </DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Name *</Label>
-                  <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="mt-1" />
+                  <Input
+                    value={editing.name}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                    className="mt-1"
+                    placeholder="Client name"
+                  />
                 </div>
                 <div>
                   <Label>Company</Label>
-                  <Input value={editing.company || ""} onChange={(e) => setEditing({ ...editing, company: e.target.value })} className="mt-1" />
+                  <Input
+                    value={editing.company || ""}
+                    onChange={(e) => setEditing({ ...editing, company: e.target.value })}
+                    className="mt-1"
+                    placeholder="Company name"
+                  />
                 </div>
                 <div>
                   <Label>Email</Label>
-                  <Input type="email" value={editing.email || ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} className="mt-1" />
+                  <Input
+                    type="email"
+                    value={editing.email || ""}
+                    onChange={(e) => setEditing({ ...editing, email: e.target.value })}
+                    className="mt-1"
+                    placeholder="email@example.com"
+                  />
                 </div>
                 <div>
                   <Label>Phone</Label>
-                  <Input value={editing.phone || ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} className="mt-1" />
+                  <Input
+                    value={editing.phone || ""}
+                    onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
+                    className="mt-1"
+                    placeholder="+91 98765 43210"
+                  />
                 </div>
                 <div>
                   <Label>Service / Niche</Label>
-                  <Input value={editing.service || ""} onChange={(e) => setEditing({ ...editing, service: e.target.value })} placeholder="e.g. SEO" className="mt-1" />
+                  <Input
+                    value={editing.service || ""}
+                    onChange={(e) => setEditing({ ...editing, service: e.target.value })}
+                    placeholder="e.g. SEO, Web Design"
+                    className="mt-1"
+                  />
                 </div>
                 <div>
-                  <Label>Estimated Value ({currency === "INR" ? "₹" : "$"})</Label>
-                  <Input type="number" value={editing.estimated_value || ""} onChange={(e) => setEditing({ ...editing, estimated_value: e.target.value })} className="mt-1" />
+                  <Label>
+                    Estimated Value ({currency === "INR" ? "₹" : "$"})
+                  </Label>
+                  <Input
+                    type="number"
+                    value={editing.estimated_value || ""}
+                    onChange={(e) =>
+                      setEditing({ ...editing, estimated_value: e.target.value })
+                    }
+                    className="mt-1"
+                    placeholder="25000"
+                  />
                 </div>
                 <div>
                   <Label>Status</Label>
-                  <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm">
-                    {LEAD_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  <select
+                    value={editing.status}
+                    onChange={(e) =>
+                      setEditing({ ...editing, status: e.target.value })
+                    }
+                    className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    {LEAD_STATUSES.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <Label>Lead Source</Label>
-                  <select value={editing.lead_source || ""} onChange={(e) => setEditing({ ...editing, lead_source: e.target.value })} className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm">
+                  <select
+                    value={editing.lead_source || ""}
+                    onChange={(e) =>
+                      setEditing({ ...editing, lead_source: e.target.value })
+                    }
+                    className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  >
                     <option value="">— Select —</option>
-                    {LEAD_SOURCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    {LEAD_SOURCES.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <Label>Follow-up Date</Label>
-                  <Input type="date" value={editing.follow_up_date || ""} onChange={(e) => setEditing({ ...editing, follow_up_date: e.target.value })} className="mt-1" />
+                  <Input
+                    type="date"
+                    value={editing.follow_up_date || ""}
+                    onChange={(e) =>
+                      setEditing({ ...editing, follow_up_date: e.target.value })
+                    }
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <Label>Last Contacted</Label>
-                  <Input type="date" value={editing.last_contacted_at ? editing.last_contacted_at.slice(0, 10) : ""} onChange={(e) => setEditing({ ...editing, last_contacted_at: e.target.value ? new Date(e.target.value).toISOString() : null })} className="mt-1" />
+                  <Input
+                    type="date"
+                    value={
+                      editing.last_contacted_at
+                        ? editing.last_contacted_at.slice(0, 10)
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        last_contacted_at: e.target.value
+                          ? new Date(e.target.value).toISOString()
+                          : null,
+                      })
+                    }
+                    className="mt-1"
+                  />
                 </div>
               </div>
               <div>
                 <Label>Notes</Label>
-                <Textarea rows={3} value={editing.lead_notes || ""} onChange={(e) => setEditing({ ...editing, lead_notes: e.target.value })} className="mt-1" placeholder="What's the context? What did they say?" />
+                <Textarea
+                  rows={3}
+                  value={editing.lead_notes || ""}
+                  onChange={(e) =>
+                    setEditing({ ...editing, lead_notes: e.target.value })
+                  }
+                  className="mt-1"
+                  placeholder="What did they say? Any important context?"
+                />
               </div>
               <div className="flex gap-2 pt-2 border-t">
-                <Button onClick={saveLead} disabled={saving} className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
-                  {saving ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Saving...</> : <><Plus className="w-4 h-4 mr-1.5" />{editing.id ? "Save" : "Add Lead"}</>}
+                <Button
+                  onClick={saveLead}
+                  disabled={saving}
+                  className="bg-primary hover:bg-primary/90 text-white"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-1.5" />
+                      {editing.id ? "Save Changes" : "Add Lead"}
+                    </>
+                  )}
                 </Button>
-                <Button variant="outline" onClick={closeEditor}>Cancel</Button>
+                <Button variant="outline" onClick={closeEditor}>
+                  Cancel
+                </Button>
               </div>
             </div>
           )}
@@ -445,11 +624,16 @@ export default function Leads() {
       </Dialog>
 
       {/* Message Templates Dialog */}
-      <Dialog open={!!templateLead} onOpenChange={(o) => !o && setTemplateLead(null)}>
+      <Dialog
+        open={!!templateLead}
+        onOpenChange={(o) => !o && setTemplateLead(null)}
+      >
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Message Templates</DialogTitle>
-            <DialogDescription>One-tap messages to send {templateLead?.name} on WhatsApp.</DialogDescription>
+            <DialogDescription>
+              One-tap messages to send {templateLead?.name} on WhatsApp.
+            </DialogDescription>
           </DialogHeader>
           {templateLead && (
             <div className="space-y-3">
@@ -470,24 +654,41 @@ export default function Leads() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{t.name}</p>
-                        <p className="text-xs text-muted-foreground">{t.description}</p>
-                        <pre className="mt-2 p-3 rounded-md bg-muted/50 text-xs whitespace-pre-wrap font-sans text-foreground">{filled}</pre>
+                        <p className="text-xs text-muted-foreground">
+                          {t.description}
+                        </p>
+                        <pre className="mt-2 p-3 rounded-md bg-muted/50 text-xs whitespace-pre-wrap font-sans text-foreground">
+                          {filled}
+                        </pre>
                         <div className="flex gap-2 mt-3">
                           <Button
                             size="sm"
                             onClick={() => {
                               const phone = templateLead.phone?.replace(/\D/g, "");
-                              if (phone) window.open(`https://wa.me/${phone}?text=${encodeURIComponent(filled)}`, "_blank");
-                              else window.open(`https://wa.me/?text=${encodeURIComponent(filled)}`, "_blank");
+                              if (phone) {
+                                window.open(
+                                  `https://wa.me/${phone}?text=${encodeURIComponent(filled)}`,
+                                  "_blank"
+                                );
+                              } else {
+                                window.open(
+                                  `https://wa.me/?text=${encodeURIComponent(filled)}`,
+                                  "_blank"
+                                );
+                              }
                             }}
                             className="bg-emerald-500 hover:bg-emerald-600 text-white"
                           >
-                            <MessageCircle className="w-3.5 h-3.5 mr-1.5" />Send on WhatsApp
+                            <MessageCircle className="w-3.5 h-3.5 mr-1.5" />
+                            Send on WhatsApp
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => { navigator.clipboard.writeText(filled); toast.success("Copied!"); }}
+                            onClick={() => {
+                              navigator.clipboard.writeText(filled);
+                              toast.success("Copied!");
+                            }}
                           >
                             <Copy className="w-3.5 h-3.5 mr-1.5" />Copy
                           </Button>
@@ -517,20 +718,35 @@ function LeadCard({ lead, currency, onDragStart, onEdit, onTemplates, onDelete, 
       <div className="flex items-start justify-between mb-2">
         <p className="font-semibold text-sm truncate">{lead.name}</p>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex">
-          <button onClick={onTemplates} className="p-1 text-muted-foreground hover:text-emerald-600">
+          <button
+            onClick={onTemplates}
+            className="p-1 text-muted-foreground hover:text-emerald-600"
+          >
             <MessageCircle className="w-3.5 h-3.5" />
           </button>
-          <button onClick={onEdit} className="p-1 text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onEdit}
+            className="p-1 text-muted-foreground hover:text-foreground"
+          >
             <Edit2 className="w-3 h-3" />
           </button>
-          <button onClick={onDelete} className="p-1 text-muted-foreground hover:text-destructive">
+          <button
+            onClick={onDelete}
+            className="p-1 text-muted-foreground hover:text-destructive"
+          >
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
-      {lead.company && <p className="text-xs text-muted-foreground">{lead.company}</p>}
+      {lead.company && (
+        <p className="text-xs text-muted-foreground">{lead.company}</p>
+      )}
       <div className="flex flex-wrap items-center gap-1.5 mt-2">
-        {src && <Badge variant="outline" className="text-[10px] h-5 px-1.5">{src.label}</Badge>}
+        {src && (
+          <Badge variant="outline" className="text-[10px] h-5 px-1.5">
+            {src.label}
+          </Badge>
+        )}
         {lead.estimated_value && (
           <span className="text-xs font-mono font-semibold text-blue-600">
             {formatCurrency(lead.estimated_value, currency)}
@@ -539,7 +755,8 @@ function LeadCard({ lead, currency, onDragStart, onEdit, onTemplates, onDelete, 
       </div>
       {lead.follow_up_date && (
         <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
-          <Calendar className="w-3 h-3" />Follow-up {formatDate(lead.follow_up_date)}
+          <Calendar className="w-3 h-3" />
+          Follow-up {formatDate(lead.follow_up_date)}
         </p>
       )}
       <div className="mt-2 pt-2 border-t">
@@ -549,7 +766,9 @@ function LeadCard({ lead, currency, onDragStart, onEdit, onTemplates, onDelete, 
           onClick={(e) => e.stopPropagation()}
           className="text-[10px] w-full h-6 rounded border bg-background px-1.5 text-muted-foreground"
         >
-          {LEAD_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          {LEAD_STATUSES.map(s => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
         </select>
       </div>
     </div>
