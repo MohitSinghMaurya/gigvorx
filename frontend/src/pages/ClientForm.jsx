@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useCollection } from "@/lib/useCollection";
+import { supabase } from "@/lib/supabase";
 import { usePlanLimits } from "@/lib/usePlanLimits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,6 @@ import { toast } from "sonner";
 
 export default function ClientForm() {
   const { id } = useParams();
-  const { create, update, get } = useCollection("clients");
   const navigate = useNavigate();
   const editing = !!id;
   const { canAddClient, limits, usage, isPro } = usePlanLimits();
@@ -21,16 +20,21 @@ export default function ClientForm() {
     name: "", email: "", phone: "", company: "",
     service: "", budget: "", deadline: "", notes: ""
   });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (editing) {
-      const c = get(id);
-      if (c) setForm(f => ({ ...f, ...c }));
-    }
-    // eslint-disable-next-line
-  }, [id]);
+    if (!editing) return;
+    supabase
+      .from("clients")
+      .select("*")
+      .eq("id", id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) { toast.error("Failed to load client"); return; }
+        if (data) setForm(f => ({ ...f, ...data }));
+      });
+  }, [id, editing]);
 
-  // Block new client if limit reached
   if (!editing && !canAddClient) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -43,11 +47,10 @@ export default function ClientForm() {
           </div>
           <h2 className="text-2xl font-bold mb-2">Client limit reached</h2>
           <p className="text-muted-foreground mb-2">
-            You've used <span className="font-semibold text-foreground">{usage.clients}</span> of your <span className="font-semibold text-foreground">{limits.clients}</span> client slots.
+            You've used <span className="font-semibold text-foreground">{usage.clients}</span> of your{" "}
+            <span className="font-semibold text-foreground">{limits.clients}</span> client slots.
           </p>
-          <p className="text-muted-foreground mb-6">
-            Upgrade to Pro for unlimited clients.
-          </p>
+          <p className="text-muted-foreground mb-6">Upgrade to Pro for unlimited clients.</p>
           <div className="flex gap-2 justify-center">
             <Button variant="outline" onClick={() => navigate("/clients")}>Go back</Button>
             <Button onClick={() => navigate("/pricing-app")} className="bg-brand-gradient text-white hover:opacity-90">
@@ -59,16 +62,24 @@ export default function ClientForm() {
     );
   }
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     if (!form.name) { toast.error("Name is required"); return; }
+    setLoading(true);
+
+    const { id: _id, created_at, updated_at, ...payload } = form;
+
     if (editing) {
-      update(id, form);
+      const { error } = await supabase.from("clients").update(payload).eq("id", id);
+      if (error) { toast.error("Failed to update client"); setLoading(false); return; }
       toast.success("Client updated");
     } else {
-      create(form);
+      const { error } = await supabase.from("clients").insert([payload]);
+      if (error) { toast.error("Failed to add client"); setLoading(false); return; }
       toast.success("Client added");
     }
+
+    setLoading(false);
     navigate("/clients");
   };
 
@@ -79,15 +90,19 @@ export default function ClientForm() {
       <Button variant="ghost" size="sm" onClick={() => navigate("/clients")} className="mb-4 -ml-2" data-testid="back-clients">
         <ArrowLeft className="w-4 h-4 mr-1" />Back
       </Button>
-      <h1 className="text-3xl font-bold tracking-tight mb-1">{editing ? "Edit client" : "Add new client"}</h1>
-      <p className="text-muted-foreground mb-2">{editing ? "Update client details below." : "Capture key info to power briefs & invoices."}</p>
+      <h1 className="text-3xl font-bold tracking-tight mb-1">
+        {editing ? "Edit client" : "Add new client"}
+      </h1>
+      <p className="text-muted-foreground mb-2">
+        {editing ? "Update client details below." : "Capture key info to power briefs & invoices."}
+      </p>
 
-      {/* Usage indicator for non-pro users */}
       {!editing && !isPro && (
         <div className="mb-6 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm flex items-center justify-between">
           <span>Client slots used: <span className="font-semibold">{usage.clients} / {limits.clients}</span></span>
           {usage.clients >= limits.clients - 2 && (
-            <Button size="sm" variant="outline" onClick={() => navigate("/pricing-app")} className="border-amber-300 text-amber-700 hover:bg-amber-100 h-7 text-xs">
+            <Button size="sm" variant="outline" onClick={() => navigate("/pricing-app")}
+              className="border-amber-300 text-amber-700 hover:bg-amber-100 h-7 text-xs">
               Upgrade
             </Button>
           )}
@@ -131,7 +146,8 @@ export default function ClientForm() {
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <Button type="submit" data-testid="client-save" className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20">
+            <Button type="submit" disabled={loading} data-testid="client-save"
+              className="bg-brand-gradient text-white hover:opacity-90 shadow-sm shadow-blue-500/20">
               <Save className="w-4 h-4 mr-1.5" />{editing ? "Save changes" : "Add client"}
             </Button>
             <Button type="button" variant="outline" onClick={() => navigate("/clients")}>Cancel</Button>
