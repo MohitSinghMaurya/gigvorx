@@ -1,35 +1,48 @@
+// frontend/src/lib/CurrencyContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const CurrencyContext = createContext({});
 
 export function CurrencyProvider({ children }) {
-  const [currency, setCurrency] = useState("INR");
+  const [currency, setCurrencyState] = useState("INR");
 
   useEffect(() => {
-    // Try to detect user location for currency
+    // Load saved preference first — this makes currency stick after refresh
     const saved = localStorage.getItem("gigvorx_currency");
     if (saved) {
-      setCurrency(saved);
+      setCurrencyState(saved);
       return;
     }
-
-    // Auto-detect based on timezone
-    try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (timezone && !timezone.includes("Asia/Kolkata") && !timezone.includes("Asia/Calcutta")) {
-        setCurrency("USD");
-      } else {
-        setCurrency("INR");
-      }
-    } catch {
-      setCurrency("INR");
-    }
+    // Auto-detect from IP
+    fetch("https://ipapi.co/json/")
+      .then(res => res.json())
+      .then(data => {
+        const detected = data.country_code === "IN" ? "INR" : "USD";
+        setCurrencyState(detected);
+        localStorage.setItem("gigvorx_currency", detected);
+      })
+      .catch(() => {
+        // Fallback: detect from timezone
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          const isIndia = tz.includes("Kolkata") || tz.includes("Calcutta");
+          const fallback = isIndia ? "INR" : "USD";
+          setCurrencyState(fallback);
+          localStorage.setItem("gigvorx_currency", fallback);
+        } catch {
+          setCurrencyState("INR");
+        }
+      });
   }, []);
+
+  const setCurrency = (c) => {
+    setCurrencyState(c);
+    localStorage.setItem("gigvorx_currency", c);
+  };
 
   const toggleCurrency = () => {
     const next = currency === "INR" ? "USD" : "INR";
     setCurrency(next);
-    localStorage.setItem("gigvorx_currency", next);
   };
 
   const value = {

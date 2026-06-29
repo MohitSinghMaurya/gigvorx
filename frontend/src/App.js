@@ -1,3 +1,4 @@
+// frontend/src/App.js
 import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
 import { CurrencyProvider } from "@/lib/CurrencyContext";
@@ -26,6 +27,7 @@ import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
 import PublicIntakeForm from "@/pages/PublicIntakeForm";
+import Demo from "@/pages/Demo";
 
 function LoadingScreen() {
   return (
@@ -68,14 +70,17 @@ function PublicOnly({ children }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public pages */}
       <Route path="/" element={<PublicLayout><Landing /></PublicLayout>} />
       <Route path="/pricing" element={<PublicLayout><Pricing /></PublicLayout>} />
+      <Route path="/demo" element={<PublicLayout><Demo /></PublicLayout>} />
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
 
-      {/* PUBLIC INTAKE FORM - No login required */}
+      {/* Public intake form — no login required */}
       <Route path="/intake/:shareToken" element={<PublicLayout><PublicIntakeForm /></PublicLayout>} />
 
+      {/* Protected app pages */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
@@ -92,8 +97,10 @@ function AppRoutes() {
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="/pricing-app" element={<ProtectedRoute><Pricing inApp /></ProtectedRoute>} />
 
+      {/* Admin */}
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
 
+      {/* Info pages */}
       <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
       <Route path="/privacy" element={<PublicLayout><Privacy /></PublicLayout>} />
       <Route path="/terms" element={<PublicLayout><Terms /></PublicLayout>} />
