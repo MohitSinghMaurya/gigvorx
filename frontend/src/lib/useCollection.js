@@ -4,7 +4,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { readList, writeList, uid } from "@/lib/storage";
 import { supabase, isSupabaseEnabled } from "@/lib/supabase";
 
-// Map between camelCase frontend and snake_case DB column names
 const KEY_TO_DB = {
   clientName: "client_name", clientEmail: "client_email", clientAddress: "client_address",
   invoiceNumber: "invoice_number", issueDate: "issue_date", dueDate: "due_date",
@@ -12,10 +11,12 @@ const KEY_TO_DB = {
   paidAt: "paid_at", createdAt: "created_at", updatedAt: "updated_at",
   upiId: "upi_id", qrImage: "qr_image", clientId: "client_id",
   leadSource: "lead_source", followUpDate: "follow_up_date",
-  lastContactedAt: "last_contacted_at", leadNotes: "lead_notes", estimatedValue: "estimated_value",
-  isLead: "is_lead",
+  lastContactedAt: "last_contacted_at", leadNotes: "lead_notes",
+  estimatedValue: "estimated_value", isLead: "is_lead",
 };
-const DB_TO_KEY = Object.fromEntries(Object.entries(KEY_TO_DB).map(([k, v]) => [v, k]));
+const DB_TO_KEY = Object.fromEntries(
+  Object.entries(KEY_TO_DB).map(([k, v]) => [v, k])
+);
 
 function toDb(obj) {
   const out = {};
@@ -34,13 +35,14 @@ function fromDb(obj) {
   return out;
 }
 
-// TABLE_BY_KEY maps collection name to Supabase table name
-// leads uses the clients table but filters by is_lead = true
+// leads and clients both use the "clients" table
+// leads = rows where is_lead is true
+// clients = rows where is_lead is false or null
 const TABLE_BY_KEY = {
   clients: "clients",
   briefs: "briefs",
   invoices: "invoices",
-  leads: "clients", // leads are stored in clients table with is_lead = true
+  leads: "clients",
 };
 
 export function useCollection(key) {
@@ -54,6 +56,7 @@ export function useCollection(key) {
     if (!user) return;
     setLoading(true);
     setError(null);
+
     try {
       if (isSupabaseEnabled && table) {
         let query = supabase
@@ -62,43 +65,48 @@ export function useCollection(key) {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
-        // If fetching leads, only get rows where is_lead is true
+        // Filter leads: only rows with is_lead = true
         if (key === "leads") {
           query = query.eq("is_lead", true);
         }
 
-        // If fetching clients, only get rows where is_lead is false or null
+        // Filter clients: only rows where is_lead is false or not set
         if (key === "clients") {
           query = query.or("is_lead.is.null,is_lead.eq.false");
         }
 
         const { data, error: e } = await query;
+
         if (e) throw e;
+
         setItems((data || []).map(fromDb));
       } else {
+        // localStorage fallback
         const all = readList(user.id, key);
         setItems(all);
       }
     } catch (e) {
       console.error("useCollection fetch error", key, e);
-      // Show "No data yet" instead of "Failed to load" for empty tables
-      if (e.code === "PGRST116" || e.message?.includes("no rows")) {
-        setItems([]);
-      } else {
-        setError(e.message || "Failed to load");
-        // Try localStorage fallback
-        try {
-          setItems(readList(user.id, key));
-        } catch {
-          setItems([]);
+      // Try localStorage fallback before showing error
+      try {
+        const fallback = readList(user.id, key);
+        setItems(fallback);
+        // Only show error if fallback is also empty
+        if (fallback.length === 0) {
+          setError(null); // show empty state, not error
         }
+      } catch {
+        setItems([]);
+        setError(e.message || "Failed to load");
       }
     } finally {
       setLoading(false);
     }
   }, [user, key, table]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
   const create = useCallback(async (data) => {
     if (!user) return null;
@@ -123,7 +131,6 @@ export function useCollection(key) {
         return inserted;
       } catch (e) {
         console.error("create supabase error", e);
-        // Fall through to localStorage
       }
     }
 
@@ -135,33 +142,38 @@ export function useCollection(key) {
 
   const update = useCallback(async (id, patch) => {
     if (!user) return null;
-    const next = items.map(i =>
-      i.id === id ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i
+    const next = items.map((i) =>
+      i.id === id
+        ? { ...i, ...patch, updatedAt: new Date().toISOString() }
+        : i
     );
     setItems(next);
 
     if (isSupabaseEnabled && table) {
       try {
-        const payload = toDb({ ...patch, updatedAt: new Date().toISOString() });
+        const payload = toDb({
+          ...patch,
+          updatedAt: new Date().toISOString(),
+        });
         const { error: e } = await supabase
           .from(table)
           .update(payload)
           .eq("id", id)
           .eq("user_id", user.id);
         if (e) throw e;
-        return next.find(i => i.id === id);
+        return next.find((i) => i.id === id);
       } catch (e) {
         console.error("update supabase error", e);
       }
     }
 
     writeList(user.id, key, next);
-    return next.find(i => i.id === id);
+    return next.find((i) => i.id === id);
   }, [items, key, table, user]);
 
   const remove = useCallback(async (id) => {
     if (!user) return;
-    const next = items.filter(i => i.id !== id);
+    const next = items.filter((i) => i.id !== id);
     setItems(next);
 
     if (isSupabaseEnabled && table) {
@@ -181,9 +193,18 @@ export function useCollection(key) {
     writeList(user.id, key, next);
   }, [items, key, table, user]);
 
-  const get = useCallback((id) => items.find(i => i.id === id), [items]);
+  const get = useCallback((id) => items.find((i) => i.id === id), [items]);
 
-  return { items, loading, error, create, update, remove, get, refresh: fetchAll };
+  return {
+    items,
+    loading,
+    error,
+    create,
+    update,
+    remove,
+    get,
+    refresh: fetchAll,
+  };
 }
 
 export function useInvoiceNumber() {

@@ -7,16 +7,17 @@ export function CurrencyProvider({ children }) {
   const [currency, setCurrencyState] = useState("INR");
 
   useEffect(() => {
-    // Load saved preference first — this makes currency stick after refresh
+    // Check saved preference first — this makes it stick after refresh
     const saved = localStorage.getItem("gigvorx_currency");
     if (saved) {
       setCurrencyState(saved);
       return;
     }
-    // Auto-detect from IP
+
+    // Auto detect from IP
     fetch("https://ipapi.co/json/")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         const detected = data.country_code === "IN" ? "INR" : "USD";
         setCurrencyState(detected);
         localStorage.setItem("gigvorx_currency", detected);
@@ -25,7 +26,8 @@ export function CurrencyProvider({ children }) {
         // Fallback: detect from timezone
         try {
           const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-          const isIndia = tz.includes("Kolkata") || tz.includes("Calcutta");
+          const isIndia =
+            tz.includes("Kolkata") || tz.includes("Calcutta");
           const fallback = isIndia ? "INR" : "USD";
           setCurrencyState(fallback);
           localStorage.setItem("gigvorx_currency", fallback);
@@ -35,6 +37,7 @@ export function CurrencyProvider({ children }) {
       });
   }, []);
 
+  // Always saves to localStorage when changed
   const setCurrency = (c) => {
     setCurrencyState(c);
     localStorage.setItem("gigvorx_currency", c);
