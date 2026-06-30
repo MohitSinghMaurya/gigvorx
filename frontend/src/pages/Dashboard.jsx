@@ -13,7 +13,28 @@ import {
   Users, FileText, Receipt, TrendingUp, ArrowUpRight, Plus,
   CheckCircle2, Clock, AlertCircle, ArrowRight, Sparkles, Loader2,
   X, Globe, User, Building2, Link2, CreditCard, ListChecks,
+  AlertTriangle, Crown,
 } from "lucide-react";
+
+function getTrialStatus(user) {
+  const isTrial = user?.plan === "trial";
+  if (!isTrial) return null;
+  if (!user?.trialEndsAt) {
+    return { label: "Trial: starts today", description: "Your 7-day free trial starts with your account.", tone: "blue" };
+  }
+
+  const msLeft = new Date(user.trialEndsAt).getTime() - Date.now();
+  if (msLeft <= 0) {
+    return { label: "Trial expired — upgrade to continue", description: "Choose a paid plan to keep creating briefs, invoices, and client records.", tone: "rose" };
+  }
+
+  const daysLeft = Math.ceil(msLeft / 86400000);
+  if (daysLeft <= 1) {
+    return { label: "Trial ends today", description: "Upgrade today to avoid interruption.", tone: "amber" };
+  }
+
+  return { label: `Trial: ${daysLeft} days left`, description: "Your 7-day trial is active. Upgrade anytime to keep your workflow after trial.", tone: "blue" };
+}
 
 function StatCard({ label, value, sub, icon: Icon, accent, testid }) {
   return (
@@ -78,7 +99,6 @@ export default function Dashboard() {
     return { paid, pending, overdue, revenue, pendingAmt };
   }, [invoices]);
 
-  // ─── ONBOARDING STEPS — 8 steps, each checks real data to mark itself done ───
   const onboardingSteps = useMemo(() => {
     const hasBusinessInfo = user?.id
       ? !!readSetting(user.id, "business", null)?.name
@@ -158,7 +178,6 @@ export default function Dashboard() {
   const progressPct = Math.round((completedCount / totalSteps) * 100);
   const allDone = completedCount === totalSteps;
 
-  // FIXED: clean function, no require(), just writeSetting imported at top
   const dismissOnboarding = useCallback(() => {
     setOnboardingDismissed(true);
     if (user?.id) {
@@ -194,11 +213,11 @@ export default function Dashboard() {
   }, [invoices, briefs, clients]);
 
   const hello = (user?.name || user?.email || "there").split(" ")[0];
+  const trialStatus = getTrialStatus(user);
   const showOnboarding = !allDone && !onboardingDismissed && !loading;
 
   return (
     <div className="space-y-8">
-      {/* Greeting */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -217,7 +236,25 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── ONBOARDING CHECKLIST — shows until all 8 steps done or dismissed ── */}
+      {trialStatus && (
+        <Card className={`p-5 border ${trialStatus.tone === "rose" ? "bg-rose-50 border-rose-200" : trialStatus.tone === "amber" ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-200"}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${trialStatus.tone === "rose" ? "bg-rose-100 text-rose-700" : trialStatus.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                {trialStatus.tone === "rose" ? <AlertTriangle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+              </div>
+              <div>
+                <p className={`font-semibold ${trialStatus.tone === "rose" ? "text-rose-800" : trialStatus.tone === "amber" ? "text-amber-800" : "text-blue-800"}`}>{trialStatus.label}</p>
+                <p className={`text-sm mt-0.5 ${trialStatus.tone === "rose" ? "text-rose-700" : trialStatus.tone === "amber" ? "text-amber-700" : "text-blue-700"}`}>{trialStatus.description}</p>
+              </div>
+            </div>
+            <Button onClick={() => navigate("/pricing-app")} className="bg-brand-gradient text-white hover:opacity-90 shrink-0">
+              <Crown className="w-4 h-4 mr-1.5" />Upgrade
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {showOnboarding && (
         <Card className="p-6 bg-gradient-to-br from-blue-50 to-violet-50 border-blue-100 relative overflow-hidden">
           <button
@@ -236,7 +273,6 @@ export default function Dashboard() {
             {completedCount} of {totalSteps} steps completed — finish these to unlock the full GigVorx workflow.
           </p>
 
-          {/* Progress bar */}
           <div className="h-2 rounded-full bg-white/60 overflow-hidden mb-5">
             <div
               className="h-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-500"
@@ -284,7 +320,6 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* All steps complete celebration banner */}
       {allDone && !onboardingDismissed && !loading && (
         <Card className="p-5 bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -309,7 +344,6 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Stats */}
       {loading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => (
@@ -355,7 +389,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Two-col content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2 p-6">
           <div className="flex items-center justify-between mb-5">
@@ -447,7 +480,6 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Revenue summary */}
           {!loading && stats.revenue > 0 && (
             <div className="mt-6 pt-4 border-t space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">This month</p>

@@ -13,6 +13,16 @@ import { supabase, isSupabaseEnabled } from "@/lib/supabase";
 const AuthContext = createContext(null);
 
 const VALID_PLANS = ["trial", "starter", "pro", "premium", "agency"];
+const TRIAL_DAYS = 7;
+const TRIAL_MS = TRIAL_DAYS * 86400000;
+
+function createTrialEndDate() {
+  return new Date(Date.now() + TRIAL_MS).toISOString();
+}
+
+function needsTrialStart(profile) {
+  return profile?.plan === "trial" && !profile.trialEndsAt && !profile.trial_ends_at;
+}
 
 const DEMO_USER = {
   id: "demo-user-1",
@@ -27,7 +37,7 @@ const DEMO_USER = {
   earlyAccessStartedAt: null,
   lastActiveAt: null,
   createdAt: "2025-01-15T00:00:00.000Z",
-  trialEndsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+  trialEndsAt: createTrialEndDate(),
 };
 
 const ADMIN_USER = {
@@ -150,6 +160,38 @@ async function saveProfileToSupabase(profile) {
   return await supabase.from("users_profiles").upsert(profilePayload);
 }
 
+async function ensureTrialStarted(profile) {
+  if (!needsTrialStart(profile)) return profile;
+  const updatedProfile = {
+    ...profile,
+    plan: "trial",
+    planStatus: profile.planStatus || "trial",
+    billingStatus: profile.billingStatus || "free",
+    subscriptionActive: Boolean(profile.subscriptionActive),
+    trialEndsAt: createTrialEndDate(),
+  };
+  await saveProfileToSupabase(updatedProfile);
+  return updatedProfile;
+}
+
+function ensureLocalTrialStarted(profile) {
+  if (!needsTrialStart(profile)) return profile;
+  const updatedProfile = {
+    ...profile,
+    plan: "trial",
+    planStatus: profile.planStatus || "trial",
+    billingStatus: profile.billingStatus || "free",
+    subscriptionActive: Boolean(profile.subscriptionActive),
+    trialEndsAt: createTrialEndDate(),
+  };
+  const users = readGlobal("users", []);
+  writeGlobal(
+    "users",
+    users.map((u) => (u.id === updatedProfile.id ? { ...u, trialEndsAt: updatedProfile.trialEndsAt } : u))
+  );
+  return updatedProfile;
+}
+
 async function loadProfile(authUser) {
   if (!supabase || !authUser) return null;
   const { data, error } = await supabase
@@ -181,7 +223,7 @@ async function loadProfile(authUser) {
       await saveProfileToSupabase(finalProfile);
       localStorage.removeItem("gigvorx_pending_plan");
     }
-    return finalProfile;
+    return await ensureTrialStarted(finalProfile);
   }
   const newPlan = localEarlyAccessPlan || "trial";
   const isEarlyAccess = newPlan !== "trial";
@@ -199,7 +241,7 @@ async function loadProfile(authUser) {
     lastActiveAt: null,
     trialEndsAt: isEarlyAccess
       ? null
-      : new Date(Date.now() + 7 * 86400000).toISOString(),
+      : createTrialEndDate(),
     createdAt: authUser.created_at || now,
   };
   await saveProfileToSupabase(newProfile);
@@ -376,7 +418,8 @@ export function AuthProvider({ children }) {
           const u = users.find((x) => x.id === sessionId);
           if (u) {
             const { password, ...safe } = u;
-            const finalProfile = await applyPendingEarlyAccessToProfile(safe);
+            const trialProfile = ensureLocalTrialStarted(safe);
+            const finalProfile = await applyPendingEarlyAccessToProfile(trialProfile);
             if (mounted) setUser(finalProfile);
           }
         }
@@ -424,7 +467,8 @@ export function AuthProvider({ children }) {
       if (!u) throw new Error("Invalid email or password");
       localStorage.setItem("gv_session", u.id);
       const { password: _, ...safe } = u;
-      const finalProfile = await applyPendingEarlyAccessToProfile(safe);
+      const trialProfile = ensureLocalTrialStarted(safe);
+      const finalProfile = await applyPendingEarlyAccessToProfile(trialProfile);
       setUser(finalProfile);
       return finalProfile;
     },
@@ -470,7 +514,7 @@ export function AuthProvider({ children }) {
         createdAt: now,
         trialEndsAt: pendingPlan
           ? null
-          : new Date(Date.now() + 7 * 86400000).toISOString(),
+          : createTrialEndDate(),
       };
       writeGlobal("users", [...users, newUser]);
       localStorage.setItem("gv_session", newUser.id);

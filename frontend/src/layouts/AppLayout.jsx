@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
-import { daysFromNow } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/Brand";
 import {
@@ -27,6 +26,58 @@ const NAV = [
 const SECONDARY = [
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
+
+function getTrialStatus(user) {
+  const isTrial = user?.plan === "trial";
+  if (!isTrial) {
+    return { isTrial: false, daysLeft: null, isExpired: false, isLastDay: false, label: null, description: null };
+  }
+  if (!user?.trialEndsAt) {
+    return {
+      isTrial: true,
+      daysLeft: null,
+      isExpired: false,
+      isLastDay: false,
+      label: "Trial: starts today",
+      description: "Your 7-day trial starts when your account is ready.",
+    };
+  }
+
+  const msLeft = new Date(user.trialEndsAt).getTime() - Date.now();
+  const isExpired = msLeft <= 0;
+  const daysLeft = isExpired ? 0 : Math.ceil(msLeft / 86400000);
+
+  if (isExpired) {
+    return {
+      isTrial: true,
+      daysLeft: 0,
+      isExpired: true,
+      isLastDay: false,
+      label: "Trial expired — upgrade to continue",
+      description: "Choose a paid plan to keep using GigVorx.",
+    };
+  }
+
+  if (daysLeft <= 1) {
+    return {
+      isTrial: true,
+      daysLeft: 1,
+      isExpired: false,
+      isLastDay: true,
+      label: "Trial ends today",
+      description: "Upgrade today to avoid interruption.",
+    };
+  }
+
+  return {
+    isTrial: true,
+    daysLeft,
+    isExpired: false,
+    isLastDay: false,
+    label: `Trial: ${daysLeft} days left`,
+    description: "Upgrade to keep your workflow after the trial.",
+  };
+}
 
 function NavLink({ to, label, icon: Icon, testid, onClick }) {
   const { pathname } = useLocation();
@@ -81,12 +132,12 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const trialDays = useMemo(() => user?.trialEndsAt ? Math.max(0, daysFromNow(user.trialEndsAt)) : null, [user]);
+  const trialStatus = useMemo(() => getTrialStatus(user), [user]);
   const initials = (user?.name || "U").split(" ").map(s => s[0]).join("").slice(0, 2).toUpperCase();
-  const isTrial = user?.plan === "trial";
+  const isTrial = trialStatus.isTrial;
   const isAdmin = user?.role === "admin";
-  const isExpired = isTrial && trialDays === 0;
-  const isLastDay = isTrial && trialDays === 1;
+  const isExpired = trialStatus.isExpired;
+  const isLastDay = trialStatus.isLastDay;
 
   const Sidebar = ({ onItemClick }) => (
     <div className="flex flex-col h-full bg-background">
@@ -117,18 +168,10 @@ export default function AppLayout({ children }) {
             <Sparkles className="w-5 h-5 mb-2 text-sky-300" />
           )}
           <p className="font-semibold text-sm">
-            {isExpired
-              ? "Trial expired!"
-              : isLastDay
-              ? "Last day of trial!"
-              : `${trialDays} ${trialDays === 1 ? "day" : "days"} left in trial`}
+            {trialStatus.label}
           </p>
           <p className="text-xs text-white/70 mt-0.5">
-            {isExpired
-              ? "Upgrade now to continue using GigVorx."
-              : isLastDay
-              ? "Tomorrow your trial ends. Upgrade today!"
-              : "Upgrade to keep your workflow."}
+            {trialStatus.description}
           </p>
           <Button
             data-testid="sidebar-upgrade-btn"
@@ -146,12 +189,11 @@ export default function AppLayout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-muted/30">
 
-      {/* Trial expired full banner */}
       {isExpired && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-rose-600 text-white px-4 py-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-medium">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            Your free trial has expired. Upgrade now to continue using GigVorx.
+            Trial expired — upgrade to continue using GigVorx.
           </div>
           <Button
             size="sm"
@@ -163,12 +205,11 @@ export default function AppLayout({ children }) {
         </div>
       )}
 
-      {/* Last day warning banner */}
       {isLastDay && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white px-4 py-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-medium">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            Tomorrow is the last day of your free trial! Upgrade today to avoid interruption.
+            Trial ends today. Upgrade today to avoid interruption.
           </div>
           <Button
             size="sm"
@@ -180,7 +221,6 @@ export default function AppLayout({ children }) {
         </div>
       )}
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setMobileOpen(false)} />
       )}
@@ -193,7 +233,6 @@ export default function AppLayout({ children }) {
       </aside>
 
       <div className={`flex-1 flex flex-col overflow-hidden min-w-0 ${(isExpired || isLastDay) ? "pt-10" : ""}`}>
-        {/* Top header */}
         <header className="h-16 border-b bg-background/80 backdrop-blur-sm flex items-center justify-between px-4 md:px-6 gap-4 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -208,14 +247,14 @@ export default function AppLayout({ children }) {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
-            {isTrial && trialDays !== null && (
+            {isTrial && trialStatus.label && (
               <Badge
                 data-testid="trial-status-badge"
                 variant="outline"
                 className={`hidden sm:inline-flex font-medium ${isExpired ? "border-rose-300 bg-rose-50 text-rose-700" : isLastDay ? "border-amber-300 bg-amber-50 text-amber-700" : "border-amber-300 bg-amber-50 text-amber-700"}`}
               >
                 <Sparkles className="w-3 h-3 mr-1" />
-                {isExpired ? "Trial expired" : `${trialDays}d trial left`}
+                {trialStatus.label}
               </Badge>
             )}
             <Button
