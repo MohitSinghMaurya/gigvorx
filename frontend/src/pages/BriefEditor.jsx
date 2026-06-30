@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useCurrency } from "@/lib/CurrencyContext";
 import { usePlanLimits } from "@/lib/usePlanLimits";
-import { Lock, Crown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -13,14 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
   Save, Download, Link2, MessageCircle, Plus, X, ChevronDown,
   Type, FileText, List, Upload, Image, Link, Video, CheckCircle2,
-  Loader2, Phone, Mail, User, Lock, Crown
+  Loader2, Phone, Mail, User, Lock, Crown, Sparkles,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -440,13 +439,89 @@ const nicheTemplates = {
   ],
 };
 
+const ALL_NICHE_NAMES = Object.keys(nicheTemplates);
+
+// ─── ONE-TIME NICHE PICKER MODAL FOR STARTER PLAN ───
+function NichePickerModal({ open, onConfirm }) {
+  const [selected, setSelected] = useState([]);
+
+  const toggle = (niche) => {
+    if (selected.includes(niche)) {
+      setSelected(selected.filter(n => n !== niche));
+    } else if (selected.length < 5) {
+      setSelected([...selected, niche]);
+    }
+  };
+
+  return (
+    <Dialog open={open}>
+      <DialogContent
+        className="bg-[#111] border-white/10 text-white max-w-2xl max-h-[85vh] overflow-y-auto"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle className="text-white flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-400" />
+            Choose your 5 niches
+          </DialogTitle>
+          <DialogDescription className="text-white/50">
+            As a Starter plan user, pick exactly 5 niche templates you want to use.
+            <span className="text-amber-400 font-medium"> This choice is permanent and cannot be changed later</span> unless you upgrade to Pro, Premium, or Agency for all niches.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+          {ALL_NICHE_NAMES.map((niche) => {
+            const isSelected = selected.includes(niche);
+            const isDisabled = !isSelected && selected.length >= 5;
+            return (
+              <button
+                key={niche}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => toggle(niche)}
+                className={`p-3 rounded-lg border text-left text-sm font-medium transition-all ${
+                  isSelected
+                    ? "bg-amber-500/20 border-amber-500 text-amber-300"
+                    : isDisabled
+                    ? "bg-white/[0.02] border-white/5 text-white/20 cursor-not-allowed"
+                    : "bg-white/5 border-white/10 text-white/80 hover:border-white/30"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {isSelected && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
+                  <span>{niche}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between pt-4 border-t border-white/10 mt-4">
+          <p className="text-sm text-white/50">
+            {selected.length} / 5 selected
+          </p>
+          <Button
+            disabled={selected.length !== 5}
+            onClick={() => onConfirm(selected)}
+            className="bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-30"
+          >
+            <CheckCircle2 className="w-4 h-4 mr-1.5" />
+            Confirm my 5 niches
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function BriefEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, saveChosenNiches } = useAuth();
   const { currency } = useCurrency();
-  const { isNicheAllowed } = usePlanLimits();
-  const { isNicheAllowed } = usePlanLimits();
+  const { isStarter, isPro: isProPlan } = usePlanLimits();
   const { toast } = useToast();
 
   const editing = id && id !== "new";
@@ -469,6 +544,31 @@ export default function BriefEditor() {
   const [saving, setSaving] = useState(false);
   const [loadingBrief, setLoadingBrief] = useState(false);
   const [briefData, setBriefData] = useState(null);
+  const [savingNiches, setSavingNiches] = useState(false);
+
+  // Determines which niches this user can use right now
+  // Trial: all niches. Pro/Premium/Agency: all niches.
+  // Starter with chosen niches saved: only those 5.
+  // Starter with no chosen niches yet: must pick (picker shows).
+  const isNicheAllowed = (nicheName) => {
+    if (!isStarter) return true; // trial, pro, premium, agency all get everything
+    if (!user?.chosenNiches) return false; // hasn't picked yet
+    return user.chosenNiches.includes(nicheName);
+  };
+
+  const needsNichePicker = isStarter && !user?.chosenNiches;
+
+  const handleConfirmNiches = async (selectedNiches) => {
+    setSavingNiches(true);
+    try {
+      await saveChosenNiches(selectedNiches);
+      toast({ title: "Your 5 niches are saved!", description: "This selection is permanent on the Starter plan." });
+    } catch (err) {
+      toast({ title: "Failed to save niches", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingNiches(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.id) {
@@ -740,6 +840,10 @@ export default function BriefEditor() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
+
+      {/* One-time niche picker for Starter plan users */}
+      <NichePickerModal open={needsNichePicker} onConfirm={handleConfirmNiches} />
+
       <div className="border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -750,7 +854,6 @@ export default function BriefEditor() {
             </Badge>
           </div>
 
-          {/* ✅ TOP BAR BUTTONS - Responses button added here */}
           <div className="flex items-center gap-2">
             {editing && (
               <>
@@ -1090,6 +1193,18 @@ export default function BriefEditor() {
 
           {/* TEMPLATES TAB */}
           <TabsContent value="templates" className="space-y-6">
+            {isStarter && user?.chosenNiches && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-amber-300 text-sm">
+                  <Lock className="w-3.5 h-3.5 inline mr-1.5" />
+                  You're on the Starter plan with <strong>{user.chosenNiches.length} permanent niches</strong> selected. Upgrade for access to all niches.
+                </p>
+                <Button size="sm" onClick={() => navigate("/pricing-app")} className="bg-amber-500 hover:bg-amber-600 text-white shrink-0">
+                  <Crown className="w-3.5 h-3.5 mr-1.5" />Upgrade
+                </Button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Object.entries(nicheTemplates).map(([niche, template]) => {
                 const allowed = isNicheAllowed(niche);
@@ -1154,7 +1269,7 @@ export default function BriefEditor() {
               })}
             </div>
           </TabsContent>
-          
+
         </Tabs>
       </div>
 
