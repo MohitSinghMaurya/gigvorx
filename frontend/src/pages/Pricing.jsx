@@ -44,7 +44,7 @@ const PLANS = [
     features: [
       { text: "Unlimited clients", included: true, highlight: true },
       { text: "Unlimited briefs & invoices", included: true, highlight: true },
-      { text: "All 17 brief niches", included: true },
+      { text: "All 26 brief niches", included: true },
       { text: "Custom invoice templates", included: true },
       { text: "Branding (logo, UPI, QR)", included: true },
       { text: "Full analytics dashboard", included: true },
@@ -80,10 +80,10 @@ const PLANS = [
     cta: "Start free trial",
     trustLines: ["No credit card required", "Cancel anytime"],
   },
-  {
+   {
     id: "agency",
     name: "Agency",
-    priceINR: 3000,
+    priceINR: 3500,
     priceUSD: 35,
     period: "/mo",
     description: "For growing agencies and teams",
@@ -91,7 +91,7 @@ const PLANS = [
     popular: false,
     features: [
       { text: "Everything in Premium", included: true },
-      { text: "Up to 10 team members", included: true, highlight: true },
+      { text: "Up to 5 team members", included: true, highlight: true },
       { text: "White-label invoices & briefs", included: true },
       { text: "Client portal access", included: true },
       { text: "API access", included: true, comingSoon: true },
@@ -114,7 +114,7 @@ const COMPARISON_FEATURES = [
   { label: "Custom branding", starter: "—", pro: "✓", premium: "✓", agency: "✓" },
   { label: "WhatsApp & PDF sharing", starter: "✓", pro: "✓", premium: "✓", agency: "✓" },
   { label: "Analytics dashboard", starter: "Basic", pro: "Full", premium: "Advanced", agency: "Advanced" },
-  { label: "Team members", starter: "1", pro: "1", premium: "3", agency: "10" },
+  { label: "Team members", starter: "1", pro: "1", premium: "3", agency: "5" },
   { label: "AI brief generation", starter: "—", pro: "—", premium: "Coming soon", agency: "Coming soon" },
   { label: "White-label", starter: "—", pro: "—", premium: "—", agency: "✓" },
   { label: "Priority support", starter: "—", pro: "✓", premium: "✓", agency: "Dedicated" },
