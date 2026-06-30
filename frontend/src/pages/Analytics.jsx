@@ -1,7 +1,8 @@
+// frontend/src/pages/Analytics.jsx
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/format";
-import { useCurrency } from "@/contexts/CurrencyContext";
+import { useCurrency } from "@/lib/CurrencyContext";
 import { LEAD_SOURCES } from "@/lib/pipeline";
 import { Card } from "@/components/ui/card";
 import {
