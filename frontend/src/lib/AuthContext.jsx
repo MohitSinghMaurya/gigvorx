@@ -110,6 +110,7 @@ function mapDbProfileToUser(data, authUser = null) {
     lastActiveAt: data.last_active_at || null,
     trialEndsAt: data.trial_ends_at || null,
     createdAt: data.created_at || authUser?.created_at || new Date().toISOString(),
+    chosenNiches: data.chosen_niches || null,
   };
 }
 
@@ -143,6 +144,7 @@ async function saveProfileToSupabase(profile) {
         profile.early_access_started_at ||
         null,
     last_active_at: profile.lastActiveAt || profile.last_active_at || null,
+    chosen_niches: profile.chosenNiches || profile.chosen_niches || null,
     updated_at: now,
   };
   return await supabase.from("users_profiles").upsert(profilePayload);
@@ -555,6 +557,27 @@ export function AuthProvider({ children }) {
         upgradePlan,
         activateEarlyAccessPlan,
         trackEvent,
+        saveChosenNiches: async (niches) => {
+          if (!user) return null;
+          const updatedUser = { ...user, chosenNiches: niches };
+          if (isSupabaseEnabled) {
+            const { error } = await saveProfileToSupabase(updatedUser);
+            if (error) {
+              console.error("Failed to save chosen niches:", error);
+              throw new Error(error.message || "Failed to save your niche selection.");
+            }
+          } else {
+            const users = readGlobal("users", []);
+            writeGlobal(
+              "users",
+              users.map((u) =>
+                u.id === user.id ? { ...u, chosenNiches: niches } : u
+              )
+            );
+          }
+          setUser(updatedUser);
+          return updatedUser;
+        },
         supabaseEnabled: isSupabaseEnabled,
       }}
     >
