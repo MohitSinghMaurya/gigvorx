@@ -61,7 +61,7 @@ export const PLANS_INR = [
     id: "agency",
     name: "Agency",
     price: 3500,
-    priceUSD: 35,
+    priceUSD: 38,
     period: "/mo",
     description: "For growing agencies and teams",
     badge: "Best for Agencies",

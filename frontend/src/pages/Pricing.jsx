@@ -84,7 +84,7 @@ const PLANS = [
     id: "agency",
     name: "Agency",
     priceINR: 3500,
-    priceUSD: 35,
+    priceUSD: 38,
     period: "/mo",
     description: "For growing agencies and teams",
     badge: "Best for Agencies",
