@@ -10,9 +10,10 @@ import {
 } from "lucide-react";
 import { NICHES } from "@/lib/niches";
 import ExitIntentPopup from "@/components/ExitIntentPopup";
+const NICHE_TEMPLATE_COUNT = NICHES.length;
 
 const FEATURES = [
-  { icon: Sparkles, title: "AI-ready Brief Builder", desc: "17 niche templates, Google-Docs-style editor, instant share." },
+  { icon: Sparkles, title: "AI-ready Brief Builder", desc: `${NICHE_TEMPLATE_COUNT} niche templates, Google-Docs-style editor, instant share.` },
   { icon: Receipt, title: "Modern Invoice Generator", desc: "Multiple templates, GST, UPI, QR code, and PDF in one click." },
   { icon: Users, title: "Client CRM", desc: "Every client, brief, and invoice in one connected workspace." },
   { icon: BarChart3, title: "Real Analytics", desc: "Revenue, paid, pending, overdue — see your business clearly." },
@@ -200,7 +201,9 @@ export default function Landing() {
       {/* NICHES */}
       <section className="py-14 border-b bg-muted/20">
         <div className="max-w-7xl mx-auto px-4">
-          <p className="text-xs uppercase tracking-widest text-center text-muted-foreground font-semibold mb-6">17 niche brief templates ready to send</p>
+          <p className="text-xs uppercase tracking-widest text-center text-muted-foreground font-semibold mb-6">
+  {NICHE_TEMPLATE_COUNT} niche brief templates ready to send
+</p>
           <div className="flex flex-wrap justify-center gap-2">
             {NICHES.map(n => {
               const Icon = NICHE_ICONS[n.slug] || NICHE_ICONS.default;
