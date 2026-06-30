@@ -1,8 +1,10 @@
-import { useMemo, useState, useEffect } from "react";
+// frontend/src/pages/Dashboard.jsx
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useCurrency } from "@/lib/CurrencyContext";
 import { supabase } from "@/lib/supabase";
+import { readSetting, writeSetting } from "@/lib/storage";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, FileText, Receipt, TrendingUp, ArrowUpRight, Plus,
   CheckCircle2, Clock, AlertCircle, ArrowRight, Sparkles, Loader2,
+  X, Globe, User, Building2, Link2, CreditCard, ListChecks,
 } from "lucide-react";
 
 function StatCard({ label, value, sub, icon: Icon, accent, testid }) {
@@ -38,9 +41,14 @@ export default function Dashboard() {
   const [briefs, setBriefs] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   useEffect(() => {
-    if (user?.id) fetchAll();
+    if (user?.id) {
+      fetchAll();
+      const dismissed = readSetting(user.id, "onboarding_dismissed", false);
+      setOnboardingDismissed(dismissed);
+    }
   }, [user]);
 
   const fetchAll = async () => {
@@ -48,7 +56,7 @@ export default function Dashboard() {
     try {
       const [invRes, briefRes, clientRes] = await Promise.all([
         supabase.from("invoices").select("id, invoice_number, client_name, status, total, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("briefs").select("id, title, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("briefs").select("id, title, status, share_token, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("clients").select("id, name, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
       ]);
       setInvoices(invRes.data || []);
@@ -69,6 +77,94 @@ export default function Dashboard() {
     const pendingAmt = pending.reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
     return { paid, pending, overdue, revenue, pendingAmt };
   }, [invoices]);
+
+  // ─── ONBOARDING STEPS — 8 steps, each checks real data to mark itself done ───
+  const onboardingSteps = useMemo(() => {
+    const hasBusinessInfo = user?.id
+      ? !!readSetting(user.id, "business", null)?.name
+      : false;
+    const hasSharedBrief = briefs.some(b => b.share_token);
+
+    return [
+      {
+        id: "currency",
+        label: "Select your currency",
+        desc: "Choose ₹ or $ so all your invoices show the right symbol",
+        done: !!currency,
+        icon: Globe,
+        to: "/settings",
+      },
+      {
+        id: "profile",
+        label: "Complete your profile",
+        desc: "Add your name so it shows correctly across the app",
+        done: !!user?.name,
+        icon: User,
+        to: "/settings",
+      },
+      {
+        id: "business",
+        label: "Add business info",
+        desc: "This appears on every invoice you send",
+        done: hasBusinessInfo,
+        icon: Building2,
+        to: "/settings",
+      },
+      {
+        id: "client",
+        label: "Add your first client",
+        desc: "Start building your client list",
+        done: clients.length > 0,
+        icon: Users,
+        to: "/clients/new",
+      },
+      {
+        id: "brief",
+        label: "Create a brief",
+        desc: "Collect project requirements from a client",
+        done: briefs.length > 0,
+        icon: FileText,
+        to: "/briefs/new",
+      },
+      {
+        id: "share",
+        label: "Share an intake link",
+        desc: "Let your client fill the brief without signing up",
+        done: hasSharedBrief,
+        icon: Link2,
+        to: "/briefs",
+      },
+      {
+        id: "invoice",
+        label: "Create an invoice",
+        desc: "Send your first professional invoice",
+        done: invoices.length > 0,
+        icon: Receipt,
+        to: "/invoices/new",
+      },
+      {
+        id: "payment",
+        label: "Track a payment",
+        desc: "Mark an invoice as paid once you receive payment",
+        done: stats.paid.length > 0,
+        icon: CreditCard,
+        to: "/invoices",
+      },
+    ];
+  }, [user, currency, clients, briefs, invoices, stats.paid.length]);
+
+  const completedCount = onboardingSteps.filter(s => s.done).length;
+  const totalSteps = onboardingSteps.length;
+  const progressPct = Math.round((completedCount / totalSteps) * 100);
+  const allDone = completedCount === totalSteps;
+
+  // FIXED: clean function, no require(), just writeSetting imported at top
+  const dismissOnboarding = useCallback(() => {
+    setOnboardingDismissed(true);
+    if (user?.id) {
+      writeSetting(user.id, "onboarding_dismissed", true);
+    }
+  }, [user]);
 
   const recentActivity = useMemo(() => {
     const all = [
@@ -97,7 +193,8 @@ export default function Dashboard() {
     return all;
   }, [invoices, briefs, clients]);
 
-  const hello = (user?.user_metadata?.name || user?.email || "there").split(" ")[0];
+  const hello = (user?.name || user?.email || "there").split(" ")[0];
+  const showOnboarding = !allDone && !onboardingDismissed && !loading;
 
   return (
     <div className="space-y-8">
@@ -114,11 +211,103 @@ export default function Dashboard() {
           <Button variant="outline" onClick={() => navigate("/briefs/new")}>
             <FileText className="w-4 h-4 mr-1.5" />New brief
           </Button>
-          <Button onClick={() => navigate("/invoices/new")} className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
+          <Button onClick={() => navigate("/invoices/new")} className="bg-primary hover:bg-primary/90 text-white">
             <Plus className="w-4 h-4 mr-1.5" />New invoice
           </Button>
         </div>
       </div>
+
+      {/* ── ONBOARDING CHECKLIST — shows until all 8 steps done or dismissed ── */}
+      {showOnboarding && (
+        <Card className="p-6 bg-gradient-to-br from-blue-50 to-violet-50 border-blue-100 relative overflow-hidden">
+          <button
+            onClick={dismissOnboarding}
+            className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-white/60 text-muted-foreground transition-colors"
+            title="Skip guide"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          <div className="flex items-center gap-2 mb-1">
+            <ListChecks className="w-5 h-5 text-blue-600" />
+            <h3 className="font-bold text-lg">Get your first client workflow running</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            {completedCount} of {totalSteps} steps completed — finish these to unlock the full GigVorx workflow.
+          </p>
+
+          {/* Progress bar */}
+          <div className="h-2 rounded-full bg-white/60 overflow-hidden mb-5">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {onboardingSteps.map((step, i) => (
+              <Link
+                key={step.id}
+                to={step.to}
+                className={`flex items-center gap-3 p-3 rounded-lg border bg-white/70 hover:bg-white transition-colors ${
+                  step.done ? "opacity-60" : ""
+                }`}
+              >
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                  step.done ? "bg-emerald-500 text-white" : "bg-white border-2 border-blue-300 text-blue-600"
+                }`}>
+                  {step.done ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-semibold ${step.done ? "line-through text-muted-foreground" : ""}`}>
+                    {step.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{step.desc}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-blue-100 flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Don't want to follow steps? You can skip this anytime.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={dismissOnboarding}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Skip guide
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* All steps complete celebration banner */}
+      {allDone && !onboardingDismissed && !loading && (
+        <Card className="p-5 bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-semibold text-emerald-800">You're all set up! 🎉</p>
+              <p className="text-xs text-emerald-700">
+                Your GigVorx workspace is fully configured. Keep adding clients and growing your business.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={dismissOnboarding}
+            className="text-emerald-700 hover:text-emerald-800 shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </Card>
+      )}
 
       {/* Stats */}
       {loading ? (
@@ -189,7 +378,7 @@ export default function Dashboard() {
               <p>No activity yet. Create your first brief or invoice to get started.</p>
               <div className="mt-4 flex gap-2 justify-center">
                 <Button size="sm" variant="outline" onClick={() => navigate("/clients/new")}>Add client</Button>
-                <Button size="sm" className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white" onClick={() => navigate("/briefs/new")}>New brief</Button>
+                <Button size="sm" className="bg-primary hover:bg-primary/90 text-white" onClick={() => navigate("/briefs/new")}>New brief</Button>
               </div>
             </div>
           ) : (
