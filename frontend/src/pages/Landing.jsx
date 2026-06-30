@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { NICHES } from "@/lib/niches";
 import ExitIntentPopup from "@/components/ExitIntentPopup";
-const NICHE_TEMPLATE_COUNT = NICHES.length;
+const NICHE_TEMPLATE_COUNT = 26;
 
 const FEATURES = [
   { icon: Sparkles, title: "AI-ready Brief Builder", desc: `${NICHE_TEMPLATE_COUNT} niche templates, Google-Docs-style editor, instant share.` },

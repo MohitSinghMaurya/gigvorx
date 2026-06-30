@@ -74,7 +74,7 @@ const GUIDE_STEPS = [
     title: "Create a Brief",
     icon: FileText,
     color: "bg-violet-500",
-    desc: "After a call, create a Client Brief. Choose from 17 niche templates like Web Design, SEO, Social Media. Add your questions for the client to answer.",
+    desc: "After a call, create a Client Brief. Choose from 26 niche templates like Web Design, SEO, Social Media. Add your questions for the client to answer.",
     tip: "Briefs replace messy WhatsApp conversations. Everything is in one clean form.",
   },
   {

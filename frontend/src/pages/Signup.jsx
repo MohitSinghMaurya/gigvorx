@@ -67,7 +67,7 @@ export default function Signup() {
           <p className="text-sm font-semibold uppercase tracking-widest text-sky-300">What you get</p>
           <h3 className="mt-4 text-3xl font-bold leading-tight tracking-tight">Everything to look like a senior pro from day one.</h3>
           <ul className="mt-8 space-y-3 text-sm">
-            {["17 niche brief templates", "Lead pipeline with AI message templates", "Modern invoices with GST & UPI", "Client CRM that actually works", "WhatsApp + PDF sharing"].map(i => (
+            {["26 niche brief templates", "Lead pipeline with AI message templates", "Modern invoices with GST & UPI", "Client CRM that actually works", "WhatsApp + PDF sharing"].map(i => (
               <li key={i} className="flex items-center gap-3"><CheckCircle2 className="w-4 h-4 text-sky-300" />{i}</li>
             ))}
           </ul>

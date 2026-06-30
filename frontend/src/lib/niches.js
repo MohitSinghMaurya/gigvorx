@@ -1,4 +1,4 @@
-// 17 professional brief niches with discovery questions
+// Professional brief niches with discovery questions
 export const NICHES = [
   {
     slug: "web-design",
