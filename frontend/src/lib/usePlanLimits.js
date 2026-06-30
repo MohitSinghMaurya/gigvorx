@@ -1,13 +1,42 @@
+// frontend/src/lib/usePlanLimits.js
 import { useMemo } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { useCollection } from "@/lib/useCollection";
 
+// These 5 niches are free on Starter — most commonly needed by freelancers
+const STARTER_NICHES = [
+  "Web Design",
+  "Social Media",
+  "Graphic Design",
+  "Content Writing",
+  "Logo Design",
+];
+
+// All 14 niches — available on Pro, Premium, Agency
+const ALL_NICHES = [
+  "Web Design",
+  "Social Media",
+  "Graphic Design",
+  "Video Editing",
+  "SEO",
+  "Content Writing",
+  "UI/UX Design",
+  "Logo Design",
+  "App Development",
+  "Photography",
+  "Illustration",
+  "Branding",
+  "Marketing Strategy",
+  "E-commerce",
+  "Custom",
+];
+
 const LIMITS = {
-  trial:   { clients: 10, briefs: 10, invoices: 10, niches: 17 },
-  starter: { clients: 10, briefs: 10, invoices: 10, niches: 5  },
-  pro:     { clients: Infinity, briefs: Infinity, invoices: Infinity, niches: 17 },
-  premium: { clients: Infinity, briefs: Infinity, invoices: Infinity, niches: 17 },
-  agency:  { clients: Infinity, briefs: Infinity, invoices: Infinity, niches: 17 },
+  trial:   { clients: 10, briefs: 10, invoices: 10, niches: 14, allowedNiches: ALL_NICHES },
+  starter: { clients: 10, briefs: 10, invoices: 10, niches: 5,  allowedNiches: STARTER_NICHES },
+  pro:     { clients: Infinity, briefs: Infinity, invoices: Infinity, niches: 14, allowedNiches: ALL_NICHES },
+  premium: { clients: Infinity, briefs: Infinity, invoices: Infinity, niches: 14, allowedNiches: ALL_NICHES },
+  agency:  { clients: Infinity, briefs: Infinity, invoices: Infinity, niches: 14, allowedNiches: ALL_NICHES },
 };
 
 export function usePlanLimits() {
@@ -33,6 +62,11 @@ export function usePlanLimits() {
 
   const activeClients = clients.filter(c => c.isLead !== true).length;
 
+  // Checks if a specific niche name is allowed on the current plan
+  const isNicheAllowed = (nicheName) => {
+    return limits.allowedNiches.includes(nicheName);
+  };
+
   return {
     plan,
     limits,
@@ -50,5 +84,7 @@ export function usePlanLimits() {
     isStarter: plan === "starter",
     isTrial: plan === "trial",
     isPro: ["pro", "premium", "agency"].includes(plan),
+    allowedNiches: limits.allowedNiches,
+    isNicheAllowed,
   };
 }

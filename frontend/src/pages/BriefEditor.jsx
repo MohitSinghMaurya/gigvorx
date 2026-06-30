@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useCurrency } from "@/lib/CurrencyContext";
+import { usePlanLimits } from "@/lib/usePlanLimits";
+import { Lock, Crown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,7 @@ import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
   Save, Download, Link2, MessageCircle, Plus, X, ChevronDown,
   Type, FileText, List, Upload, Image, Link, Video, CheckCircle2,
-  Loader2, Phone, Mail, User
+  Loader2, Phone, Mail, User, Lock, Crown
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -270,6 +272,8 @@ export default function BriefEditor() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency } = useCurrency();
+  const { isNicheAllowed } = usePlanLimits();
+  const { isNicheAllowed } = usePlanLimits();
   const { toast } = useToast();
 
   const editing = id && id !== "new";
@@ -914,22 +918,70 @@ export default function BriefEditor() {
           {/* TEMPLATES TAB */}
           <TabsContent value="templates" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(nicheTemplates).map(([niche, template]) => (
-                <button key={niche} type="button" onClick={() => handleNicheSelect(niche)} className="p-4 rounded-xl bg-[#111] border border-white/10 hover:border-[#FF6B00]/50 hover:bg-[#161616] transition-all text-left group">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-white font-medium group-hover:text-[#FF6B00] transition-colors">{niche}</h3>
-                    <Badge variant="outline" className="border-white/10 text-white/50 text-xs">{template.length} Qs</Badge>
-                  </div>
-                  <p className="text-white/40 text-xs">{template.slice(0, 3).map(q => q.text).join(" • ").substring(0, 80)}...</p>
-                  <div className="flex flex-wrap gap-1 mt-3">
-                    {Array.from(new Set(template.map(q => q.type))).slice(0, 4).map(type => (
-                      <span key={type} className={`text-[10px] px-1.5 py-0.5 rounded ${questionTypeColors[type]}`}>{questionTypeLabels[type]}</span>
-                    ))}
-                  </div>
-                </button>
-              ))}
+              {Object.entries(nicheTemplates).map(([niche, template]) => {
+                const allowed = isNicheAllowed(niche);
+                return (
+                  <button
+                    key={niche}
+                    type="button"
+                    onClick={() => {
+                      if (allowed) {
+                        handleNicheSelect(niche);
+                      } else {
+                        navigate("/pricing-app");
+                      }
+                    }}
+                    className={`p-4 rounded-xl border transition-all text-left group relative ${
+                      allowed
+                        ? "bg-[#111] border-white/10 hover:border-[#FF6B00]/50 hover:bg-[#161616]"
+                        : "bg-[#111]/50 border-white/5 cursor-pointer"
+                    }`}
+                  >
+                    {!allowed && (
+                      <div className="absolute top-3 right-3">
+                        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] gap-1">
+                          <Lock className="w-2.5 h-2.5" />
+                          Pro
+                        </Badge>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className={`font-medium transition-colors ${
+                        allowed ? "text-white group-hover:text-[#FF6B00]" : "text-white/40"
+                      }`}>
+                        {niche}
+                      </h3>
+                      {allowed && (
+                        <Badge variant="outline" className="border-white/10 text-white/50 text-xs">
+                          {template.length} Qs
+                        </Badge>
+                      )}
+                    </div>
+                    <p className={`text-xs ${allowed ? "text-white/40" : "text-white/20"}`}>
+                      {allowed
+                        ? template.slice(0, 3).map(q => q.text).join(" • ").substring(0, 80) + "..."
+                        : "Upgrade to Pro to unlock this niche template"}
+                    </p>
+                    {allowed ? (
+                      <div className="flex flex-wrap gap-1 mt-3">
+                        {Array.from(new Set(template.map(q => q.type))).slice(0, 4).map(type => (
+                          <span key={type} className={`text-[10px] px-1.5 py-0.5 rounded ${questionTypeColors[type]}`}>
+                            {questionTypeLabels[type]}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 mt-3 text-amber-400 text-xs font-medium">
+                        <Crown className="w-3 h-3" />
+                        Upgrade to unlock
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </TabsContent>
+          
         </Tabs>
       </div>
 
