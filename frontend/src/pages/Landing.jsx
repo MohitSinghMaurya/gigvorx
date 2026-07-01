@@ -79,7 +79,7 @@ const COMPARISON_FEATURES = [
   { label: "WhatsApp follow-ups", gigvorx: true, honeybook: false, dubsado: false, bonsai: false, hats17: false },
   { label: "Dual currency (INR + USD)", gigvorx: true, honeybook: false, dubsado: false, bonsai: false, hats17: false },
   { label: "Niche-specific questions", gigvorx: true, honeybook: false, dubsado: false, bonsai: false, hats17: false },
-  { label: "Free tier", gigvorx: true, honeybook: false, dubsado: false, bonsai: false, hats17: false },
+  { label: "7-day free trial", gigvorx: true, honeybook: false, dubsado: false, bonsai: false, hats17: false },
   { label: "India-first focus", gigvorx: true, honeybook: false, dubsado: false, bonsai: false, hats17: false },
   { label: "Global expansion", gigvorx: true, honeybook: true, dubsado: true, bonsai: true, hats17: true },
   { label: "Built by a freelancer", gigvorx: true, honeybook: false, dubsado: false, bonsai: false, hats17: false },
@@ -120,7 +120,7 @@ export default function Landing() {
               <span className="text-gradient">professional workflows</span>.
             </h1>
             <p className="mt-6 text-lg lg:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-              The all-in-one workspace for freelancers and agencies. Generate AI client briefs, send proposals, create GST/VAT invoices, and follow up via WhatsApp — all in one place.
+              The all-in-one workspace for freelancers and agencies. Turn messy client conversations into clear briefs, professional invoices, payment follow-ups, and organized client records.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               {["Web Designers", "Social Media Managers", "Video Editors", "SEO Freelancers", "Graphic Designers", "Agencies"].map((niche) => (
@@ -144,7 +144,7 @@ export default function Landing() {
             <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-emerald-500" />
-                Free forever plan
+                7-day free trial
               </span>
               <span className="flex items-center gap-1.5">
                 <Globe className="w-3.5 h-3.5 text-blue-500" />
@@ -283,7 +283,7 @@ export default function Landing() {
           <div className="text-center">
             <Link to="/signup">
               <Button size="lg" className="bg-gradient-to-r from-blue-500 to-violet-500 text-white hover:opacity-90 shadow-lg shadow-blue-500/25 text-base px-8 h-12">
-                Try it free — No credit card required
+                Start your 7-day trial — No credit card required
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
@@ -436,7 +436,7 @@ export default function Landing() {
           <div className="text-center">
             <Link to="/signup">
               <Button size="lg" className="bg-gradient-to-r from-blue-500 to-violet-500 text-white hover:opacity-90 shadow-lg shadow-blue-500/25 text-base px-8 h-12">
-                Try GigVorx free — No credit card
+                Start your 7-day free trial — No credit card
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
@@ -451,10 +451,10 @@ export default function Landing() {
       <section className="py-24">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-4xl lg:text-5xl font-bold tracking-tight mb-5">Stop juggling tools. Start closing clients.</h2>
-          <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-9">Set up in 60 seconds. No credit card. Cancel anytime.</p>
+          <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-9">Start your 7-day trial in minutes. No credit card required.</p>
           <Link to="/signup">
             <Button size="lg" data-testid="footer-cta-signup" className="bg-gradient-to-r from-blue-500 to-violet-500 hover:opacity-90 text-white h-12 px-8 text-base font-semibold shadow-lg shadow-blue-500/25">
-              Get started free <ArrowRight className="w-4 h-4 ml-1" />
+              Start your 7-day trial <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </Link>
         </div>
