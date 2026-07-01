@@ -1,40 +1,40 @@
 import {
   HashRouter,
-  Routes,
-  Route,
   Navigate,
+  Route,
+  Routes,
   useLocation,
 } from "react-router-dom";
 
+import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
 import { CurrencyProvider } from "@/lib/CurrencyContext";
-import { Toaster } from "@/components/ui/sonner";
 
 import AppLayout from "@/layouts/AppLayout";
 import PublicLayout from "@/layouts/PublicLayout";
 
-import Landing from "@/pages/Landing";
-import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
-import Pricing from "@/pages/Pricing";
-import Dashboard from "@/pages/Dashboard";
-import Leads from "@/pages/Leads";
-import Clients from "@/pages/Clients";
-import ClientForm from "@/pages/ClientForm";
-import Briefs from "@/pages/Briefs";
+import About from "@/pages/About";
+import Admin from "@/pages/Admin";
+import Analytics from "@/pages/Analytics";
 import BriefEditor from "@/pages/BriefEditor";
 import BriefResponses from "@/pages/BriefResponses";
-import Invoices from "@/pages/Invoices";
-import InvoiceEditor from "@/pages/InvoiceEditor";
-import Analytics from "@/pages/Analytics";
-import Admin from "@/pages/Admin";
-import Settings from "@/pages/Settings";
-import NotFound from "@/pages/NotFound";
-import About from "@/pages/About";
-import Privacy from "@/pages/Privacy";
-import Terms from "@/pages/Terms";
-import PublicIntakeForm from "@/pages/PublicIntakeForm";
+import Briefs from "@/pages/Briefs";
+import ClientForm from "@/pages/ClientForm";
+import Clients from "@/pages/Clients";
+import Dashboard from "@/pages/Dashboard";
 import Demo from "@/pages/Demo";
+import InvoiceEditor from "@/pages/InvoiceEditor";
+import Invoices from "@/pages/Invoices";
+import Landing from "@/pages/Landing";
+import Leads from "@/pages/Leads";
+import Login from "@/pages/Login";
+import NotFound from "@/pages/NotFound";
+import Pricing from "@/pages/Pricing";
+import Privacy from "@/pages/Privacy";
+import PublicIntakeForm from "@/pages/PublicIntakeForm";
+import Settings from "@/pages/Settings";
+import Signup from "@/pages/Signup";
+import Terms from "@/pages/Terms";
 
 function LoadingScreen() {
   return (
@@ -60,13 +60,7 @@ function ProtectedRoute({ children }) {
   if (authLoading) return <LoadingScreen />;
 
   if (!user) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: location.pathname }}
-      />
-    );
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   return <AppLayout>{children}</AppLayout>;
@@ -79,13 +73,7 @@ function AdminRoute({ children }) {
   if (authLoading) return <LoadingScreen />;
 
   if (!user) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: location.pathname }}
-      />
-    );
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   if (user.role !== "admin") {
