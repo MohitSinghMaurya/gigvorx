@@ -1,26 +1,45 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/AuthContext";
-import { isSupabaseEnabled, supabase } from "@/lib/supabase";
 import { readList, uid, writeList } from "@/lib/storage";
+import { isSupabaseEnabled, supabase } from "@/lib/supabase";
 
 const KEY_TO_DB = {
   clientName: "client_name",
   clientEmail: "client_email",
   clientPhone: "client_phone",
   clientAddress: "client_address",
+  clientGst: "client_gst",
+  clientGST: "client_gst",
+
   projectTitle: "project_title",
   invoiceNumber: "invoice_number",
   issueDate: "issue_date",
   dueDate: "due_date",
+
   taxRate: "tax_rate",
-  taxAmt: "tax_amt",
-  discountAmt: "discount_amt",
+  taxAmt: "tax_amount",
+  taxAmount: "tax_amount",
+  discountAmt: "discount_amount",
+  discountAmount: "discount_amount",
+
   paidAt: "paid_at",
   createdAt: "created_at",
   updatedAt: "updated_at",
+
   upiId: "upi_id",
   qrImage: "qr_image",
+  paymentType: "payment_type",
+  bankName: "bank_name",
+  bankAccount: "bank_account",
+  bankIfsc: "bank_ifsc",
+
+  businessName: "business_name",
+  businessEmail: "business_email",
+  businessPhone: "business_phone",
+  businessAddress: "business_address",
+  businessGst: "business_gst",
+
   clientId: "client_id",
   leadSource: "lead_source",
   followUpDate: "follow_up_date",
@@ -28,13 +47,55 @@ const KEY_TO_DB = {
   leadNotes: "lead_notes",
   estimatedValue: "estimated_value",
   isLead: "is_lead",
+
   shareToken: "share_token",
   shareEnabled: "share_enabled",
 };
 
-const DB_TO_KEY = Object.fromEntries(
-  Object.entries(KEY_TO_DB).map(([key, value]) => [value, key])
-);
+const DB_TO_KEY = {
+  client_name: "clientName",
+  client_email: "clientEmail",
+  client_phone: "clientPhone",
+  client_address: "clientAddress",
+  client_gst: "clientGst",
+
+  project_title: "projectTitle",
+  invoice_number: "invoiceNumber",
+  issue_date: "issueDate",
+  due_date: "dueDate",
+
+  tax_rate: "taxRate",
+  tax_amount: "taxAmount",
+  discount_amount: "discountAmount",
+
+  paid_at: "paidAt",
+  created_at: "createdAt",
+  updated_at: "updatedAt",
+
+  upi_id: "upiId",
+  qr_image: "qrImage",
+  payment_type: "paymentType",
+  bank_name: "bankName",
+  bank_account: "bankAccount",
+  bank_ifsc: "bankIfsc",
+
+  business_name: "businessName",
+  business_email: "businessEmail",
+  business_phone: "businessPhone",
+  business_address: "businessAddress",
+  business_gst: "businessGst",
+
+  client_id: "clientId",
+  lead_source: "leadSource",
+  follow_up_date: "followUpDate",
+  last_contacted_at: "lastContactedAt",
+  lead_notes: "leadNotes",
+  estimated_value: "estimatedValue",
+  is_lead: "isLead",
+
+  share_token: "shareToken",
+  share_enabled: "shareEnabled",
+};
 
 const TABLE_BY_KEY = {
   clients: "clients",
@@ -43,43 +104,46 @@ const TABLE_BY_KEY = {
   invoices: "invoices",
 };
 
-function toDb(obj) {
-  const out = {};
+function toDb(object) {
+  const output = {};
 
-  Object.entries(obj || {}).forEach(([key, value]) => {
-    out[KEY_TO_DB[key] || key] = value;
-  });
+  for (const [key, value] of Object.entries(object || {})) {
+    if (value === undefined) continue;
+    output[KEY_TO_DB[key] || key] = value;
+  }
 
-  return out;
+  return output;
 }
 
-function fromDb(obj) {
-  if (!obj) return obj;
+function fromDb(object) {
+  if (!object) return object;
 
-  const out = {};
+  const output = {};
 
-  Object.entries(obj).forEach(([key, value]) => {
-    out[DB_TO_KEY[key] || key] = value;
-  });
+  for (const [key, value] of Object.entries(object)) {
+    output[DB_TO_KEY[key] || key] = value;
+  }
 
-  return out;
+  return output;
 }
 
-function isLeadItem(item) {
-  return item?.isLead === true || item?.is_lead === true;
-}
+function applyCollectionFilters(query, key) {
+  if (key === "leads") {
+    return query.eq("is_lead", true);
+  }
 
-function filterLocalItems(key, list) {
-  if (key === "leads") return list.filter((item) => isLeadItem(item));
-  if (key === "clients") return list.filter((item) => !isLeadItem(item));
-  return list;
+  if (key === "clients") {
+    return query.or("is_lead.is.null,is_lead.eq.false");
+  }
+
+  return query;
 }
 
 export function useCollection(key) {
   const { user } = useAuth();
 
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(user));
   const [error, setError] = useState(null);
 
   const table = TABLE_BY_KEY[key];
@@ -95,41 +159,39 @@ export function useCollection(key) {
     setError(null);
 
     try {
-      if (isSupabaseEnabled && supabase && table) {
+      if (isSupabaseEnabled && table) {
         let query = supabase
           .from(table)
           .select("*")
           .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+          .order("created_at", {
+            ascending: false,
+          });
 
-        if (key === "leads") {
-          query = query.eq("is_lead", true);
-        }
+        query = applyCollectionFilters(query, key);
 
-        if (key === "clients") {
-          query = query.or("is_lead.is.null,is_lead.eq.false");
-        }
+        const { data, error: fetchError } = await query;
 
-        const { data, error: queryError } = await query;
-
-        if (queryError) throw queryError;
+        if (fetchError) throw fetchError;
 
         setItems((data || []).map(fromDb));
         return;
       }
 
-      const localItems = readList(user.id, key);
-      setItems(filterLocalItems(key, localItems));
-    } catch (caughtError) {
-      console.error("useCollection fetch error:", key, caughtError);
+      setItems(readList(user.id, key));
+    } catch (err) {
+      console.error("useCollection fetch error", key, err);
 
-      const fallback = readList(user.id, key);
-      setItems(filterLocalItems(key, fallback));
-      setError(fallback.length ? null : caughtError.message || "Failed to load data.");
+      try {
+        setItems(readList(user.id, key));
+      } catch {
+        setItems([]);
+        setError(err.message || "Failed to load");
+      }
     } finally {
       setLoading(false);
     }
-  }, [key, table, user?.id]);
+  }, [user?.id, key, table]);
 
   useEffect(() => {
     fetchAll();
@@ -149,42 +211,42 @@ export function useCollection(key) {
       };
 
       if (key === "leads") optimistic.isLead = true;
-      if (key === "clients" && optimistic.isLead === undefined) optimistic.isLead = false;
+      if (key === "clients" && optimistic.isLead === undefined) {
+        optimistic.isLead = false;
+      }
 
-      if (isSupabaseEnabled && supabase && table) {
+      if (isSupabaseEnabled && table) {
         try {
-          const { id: _id, ...rest } = optimistic;
+          const { id: ignoredId, ...rest } = optimistic;
+
           const payload = {
             ...toDb(rest),
             user_id: user.id,
           };
 
-          const { data: row, error: insertError } = await supabase
+          const { data: row, error: createError } = await supabase
             .from(table)
             .insert(payload)
             .select()
             .single();
 
-          if (insertError) throw insertError;
+          if (createError) throw createError;
 
           const inserted = fromDb(row);
-          setItems((previous) => [inserted, ...previous]);
+          setItems((prev) => [inserted, ...prev]);
           return inserted;
-        } catch (caughtError) {
-          console.error("create supabase error:", caughtError);
+        } catch (err) {
+          console.error("create supabase error", err);
         }
       }
 
-      const currentListKey = key === "leads" ? "clients" : key;
-      const currentList = readList(user.id, currentListKey);
-      const nextList = [optimistic, ...currentList];
-
-      writeList(user.id, currentListKey, nextList);
-      setItems((previous) => [optimistic, ...previous]);
+      const next = [optimistic, ...items];
+      writeList(user.id, key, next);
+      setItems(next);
 
       return optimistic;
     },
-    [key, table, user?.id]
+    [items, key, table, user?.id]
   );
 
   const update = useCallback(
@@ -193,13 +255,19 @@ export function useCollection(key) {
 
       const now = new Date().toISOString();
 
-      const nextItems = items.map((item) =>
-        item.id === id ? { ...item, ...patch, updatedAt: now } : item
+      const next = items.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              ...patch,
+              updatedAt: now,
+            }
+          : item
       );
 
-      setItems(nextItems);
+      setItems(next);
 
-      if (isSupabaseEnabled && supabase && table) {
+      if (isSupabaseEnabled && table) {
         try {
           const payload = toDb({
             ...patch,
@@ -214,21 +282,14 @@ export function useCollection(key) {
 
           if (updateError) throw updateError;
 
-          return nextItems.find((item) => item.id === id) || null;
-        } catch (caughtError) {
-          console.error("update supabase error:", caughtError);
+          return next.find((item) => item.id === id) || null;
+        } catch (err) {
+          console.error("update supabase error", err);
         }
       }
 
-      const currentListKey = key === "leads" ? "clients" : key;
-      const currentList = readList(user.id, currentListKey);
-      const nextList = currentList.map((item) =>
-        item.id === id ? { ...item, ...patch, updatedAt: now } : item
-      );
-
-      writeList(user.id, currentListKey, nextList);
-
-      return nextItems.find((item) => item.id === id) || null;
+      writeList(user.id, key, next);
+      return next.find((item) => item.id === id) || null;
     },
     [items, key, table, user?.id]
   );
@@ -237,10 +298,10 @@ export function useCollection(key) {
     async (id) => {
       if (!user?.id) return;
 
-      const nextItems = items.filter((item) => item.id !== id);
-      setItems(nextItems);
+      const next = items.filter((item) => item.id !== id);
+      setItems(next);
 
-      if (isSupabaseEnabled && supabase && table) {
+      if (isSupabaseEnabled && table) {
         try {
           const { error: deleteError } = await supabase
             .from(table)
@@ -251,21 +312,20 @@ export function useCollection(key) {
           if (deleteError) throw deleteError;
 
           return;
-        } catch (caughtError) {
-          console.error("delete supabase error:", caughtError);
+        } catch (err) {
+          console.error("delete supabase error", err);
         }
       }
 
-      const currentListKey = key === "leads" ? "clients" : key;
-      const currentList = readList(user.id, currentListKey);
-      const nextList = currentList.filter((item) => item.id !== id);
-
-      writeList(user.id, currentListKey, nextList);
+      writeList(user.id, key, next);
     },
     [items, key, table, user?.id]
   );
 
-  const get = useCallback((id) => items.find((item) => item.id === id), [items]);
+  const get = useCallback(
+    (id) => items.find((item) => item.id === id),
+    [items]
+  );
 
   return {
     items,
@@ -286,10 +346,8 @@ export function useInvoiceNumber() {
     if (!user?.id) return "INV-001";
 
     const list = readList(user.id, "invoices");
-    const next = (list.length + 1).toString().padStart(3, "0");
+    const nextNumber = (list.length + 1).toString().padStart(3, "0");
 
-    return `INV-${next}`;
+    return `INV-${nextNumber}`;
   }, [user?.id]);
 }
-
-export default useCollection;
