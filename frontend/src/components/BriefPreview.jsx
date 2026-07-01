@@ -1,13 +1,17 @@
 import {
+  CheckCircle2,
+  CreditCard,
   FileText,
   Image,
   Link,
   List,
+  ShieldCheck,
   Type,
   Upload,
   Video,
 } from "lucide-react";
 
+import ClientEducationSection from "@/components/ClientEducationSection";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -65,19 +69,120 @@ function getQuestionText(question) {
   return question?.text || question?.q || question?.label || "Untitled Question";
 }
 
+function getMeta(brief) {
+  return brief?.answers?.__v1 || {};
+}
+
+function ensureArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function ScopePreview({ meta }) {
+  const includedWork = ensureArray(meta.includedWork);
+  const excludedWork = ensureArray(meta.excludedWork);
+  const revisionLimit = meta.revisionLimit ?? 0;
+  const revisionsUsed = meta.revisionsUsed ?? 0;
+  const advanceRequired = meta.advanceRequired;
+  const advanceType = meta.advanceType || "percent";
+  const advanceValue = meta.advanceValue || "";
+  const approved = meta.approvalStatus === "approved";
+
+  const hasScope =
+    includedWork.length > 0 ||
+    excludedWork.length > 0 ||
+    revisionLimit ||
+    advanceRequired ||
+    approved;
+
+  if (!hasScope) return null;
+
+  return (
+    <div className="space-y-3">
+      <h4 className="flex items-center gap-2 font-semibold text-white">
+        <ShieldCheck className="h-4 w-4 text-emerald-400" />
+        Scope Protection
+      </h4>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {includedWork.length > 0 ? (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+            <p className="mb-2 text-sm font-semibold text-emerald-300">
+              Included work
+            </p>
+            <ul className="space-y-1 text-xs text-emerald-50/80">
+              {includedWork.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {excludedWork.length > 0 ? (
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3">
+            <p className="mb-2 text-sm font-semibold text-rose-300">
+              Not included
+            </p>
+            <ul className="space-y-1 text-xs text-rose-50/80">
+              {excludedWork.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <p className="text-xs text-white/40">Revisions</p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {revisionsUsed} / {revisionLimit} used
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <p className="flex items-center gap-1 text-xs text-white/40">
+            <CreditCard className="h-3 w-3" />
+            Advance
+          </p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {advanceRequired
+              ? `${advanceValue}${advanceType === "percent" ? "%" : ""} required`
+              : "Not required"}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <p className="text-xs text-white/40">Approval</p>
+          <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-white">
+            {approved ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                Approved
+              </>
+            ) : (
+              "Not approved"
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BriefPreview({ brief, open, onOpenChange }) {
   if (!brief) return null;
 
   const questions = Array.isArray(brief.questions) ? brief.questions : [];
+  const meta = getMeta(brief);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto border-white/10 bg-[#111] text-white">
+      <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto border-white/10 bg-[#111] text-white">
         <DialogHeader>
           <DialogTitle className="text-white">Brief Preview</DialogTitle>
         </DialogHeader>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-5">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="border-[#FF6B00] text-[#FF6B00]">
               {brief.status || "draft"}
@@ -117,6 +222,14 @@ export function BriefPreview({ brief, open, onOpenChange }) {
             </div>
           </div>
 
+          <ScopePreview meta={meta} />
+
+          {meta.clientEducation?.enabled ? (
+            <div className="rounded-xl bg-white p-4 text-foreground">
+              <ClientEducationSection education={meta.clientEducation} compact />
+            </div>
+          ) : null}
+
           <div className="space-y-3">
             <h4 className="font-semibold text-white">Questions ({questions.length})</h4>
 
@@ -125,7 +238,10 @@ export function BriefPreview({ brief, open, onOpenChange }) {
                 const Icon = questionTypeIcons[question.type] || Type;
 
                 return (
-                  <Card key={question.id || `${getQuestionText(question)}-${index}`} className="border-white/10 bg-[#0a0a0a]">
+                  <Card
+                    key={question.id || `${getQuestionText(question)}-${index}`}
+                    className="border-white/10 bg-[#0a0a0a]"
+                  >
                     <CardContent className="pb-4 pt-4">
                       <div className="mb-2 flex items-center gap-2">
                         <Badge
@@ -133,7 +249,9 @@ export function BriefPreview({ brief, open, onOpenChange }) {
                           className="border-white/10 text-[10px] text-white/50"
                         >
                           <Icon className="mr-1 h-3 w-3" />
-                          {questionTypeLabels[question.type] || question.type || "Question"}
+                          {questionTypeLabels[question.type] ||
+                            question.type ||
+                            "Question"}
                         </Badge>
                       </div>
 
