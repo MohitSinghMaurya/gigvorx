@@ -1,64 +1,74 @@
-// frontend/src/lib/CurrencyContext.jsx
-import React, { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-const CurrencyContext = createContext({});
+const CurrencyContext = createContext({
+  currency: "INR",
+  setCurrency: () => {},
+  toggleCurrency: () => {},
+  symbol: "₹",
+});
+
+function detectFallbackCurrency() {
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    const language = navigator.language || "";
+
+    if (
+      timezone.includes("Kolkata") ||
+      timezone.includes("Calcutta") ||
+      language === "hi" ||
+      language === "en-IN"
+    ) {
+      return "INR";
+    }
+  } catch {
+    return "INR";
+  }
+
+  return "USD";
+}
+
+function normalizeCurrency(currency) {
+  return currency === "USD" ? "USD" : "INR";
+}
 
 export function CurrencyProvider({ children }) {
   const [currency, setCurrencyState] = useState("INR");
 
   useEffect(() => {
-    // Check saved preference first — this makes it stick after refresh
     const saved = localStorage.getItem("gigvorx_currency");
+
     if (saved) {
-      setCurrencyState(saved);
+      setCurrencyState(normalizeCurrency(saved));
       return;
     }
 
-    // Auto detect from IP
-    fetch("https://ipapi.co/json/")
-      .then((res) => res.json())
-      .then((data) => {
-        const detected = data.country_code === "IN" ? "INR" : "USD";
-        setCurrencyState(detected);
-        localStorage.setItem("gigvorx_currency", detected);
-      })
-      .catch(() => {
-        // Fallback: detect from timezone
-        try {
-          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-          const isIndia =
-            tz.includes("Kolkata") || tz.includes("Calcutta");
-          const fallback = isIndia ? "INR" : "USD";
-          setCurrencyState(fallback);
-          localStorage.setItem("gigvorx_currency", fallback);
-        } catch {
-          setCurrencyState("INR");
-        }
-      });
+    const detected = detectFallbackCurrency();
+    setCurrencyState(detected);
+    localStorage.setItem("gigvorx_currency", detected);
   }, []);
 
-  // Always saves to localStorage when changed
-  const setCurrency = (c) => {
-    setCurrencyState(c);
-    localStorage.setItem("gigvorx_currency", c);
+  const setCurrency = (nextCurrency) => {
+    const cleanCurrency = normalizeCurrency(nextCurrency);
+    setCurrencyState(cleanCurrency);
+    localStorage.setItem("gigvorx_currency", cleanCurrency);
   };
 
   const toggleCurrency = () => {
-    const next = currency === "INR" ? "USD" : "INR";
-    setCurrency(next);
+    setCurrency(currency === "INR" ? "USD" : "INR");
   };
 
-  const value = {
-    currency,
-    setCurrency,
-    toggleCurrency,
-    symbol: currency === "INR" ? "₹" : "$",
-  };
+  const value = useMemo(
+    () => ({
+      currency,
+      setCurrency,
+      toggleCurrency,
+      symbol: currency === "INR" ? "₹" : "$",
+    }),
+    [currency]
+  );
 
   return (
-    <CurrencyContext.Provider value={value}>
-      {children}
-    </CurrencyContext.Provider>
+    <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>
   );
 }
 
