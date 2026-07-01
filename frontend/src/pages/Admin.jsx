@@ -1,34 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/lib/AuthContext";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Users,
-  UserCheck,
   Activity,
   Clock,
-  Crown,
   CreditCard,
+  Crown,
   RefreshCw,
   ShieldCheck,
+  UserCheck,
+  Users,
 } from "lucide-react";
+
+import { useAuth } from "@/lib/AuthContext";
+import { isSupabaseEnabled, supabase } from "@/lib/supabase";
+
+const PAID_PLANS = ["starter", "pro", "premium", "agency"];
 
 function formatDate(value) {
   if (!value) return "—";
 
-  try {
-    return new Date(value).toLocaleString("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return value;
-  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return date.toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 function isToday(value) {
   if (!value) return false;
 
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
   const now = new Date();
 
   return (
@@ -36,6 +40,34 @@ function isToday(value) {
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate()
   );
+}
+
+function getCreatedAt(item) {
+  return item?.created_at || item?.createdAt || null;
+}
+
+function getLastActiveAt(item) {
+  return item?.last_active_at || item?.lastActiveAt || null;
+}
+
+function getEventName(event) {
+  return event?.event_name || event?.eventName || "Unknown event";
+}
+
+function getEventData(event) {
+  return event?.event_data || event?.eventData || {};
+}
+
+function getUserName(user) {
+  return user?.name || user?.full_name || user?.fullName || "—";
+}
+
+function getUserEmail(user) {
+  return user?.email || user?.user_email || user?.userEmail || "—";
+}
+
+function getUserPlan(user) {
+  return (user?.plan || "trial").toLowerCase();
 }
 
 function StatCard({ title, value, description, icon: Icon }) {
@@ -66,9 +98,17 @@ export default function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
-  async function loadAdminData() {
+  const loadAdminData = useCallback(async () => {
     setIsLoading(true);
     setErrorMsg("");
+
+    if (!isSupabaseEnabled) {
+      setUsers([]);
+      setEvents([]);
+      setErrorMsg("Supabase is not configured, so admin analytics cannot load.");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const { data: usersData, error: usersError } = await supabase
@@ -94,44 +134,39 @@ export default function Admin() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadAdminData();
-  }, []);
+  }, [loadAdminData]);
 
   const stats = useMemo(() => {
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const totalUsers = users.length;
+    const newUsersToday = users.filter((item) => isToday(getCreatedAt(item))).length;
+    const activeToday = users.filter((item) => isToday(getLastActiveAt(item))).length;
 
-    const newUsersToday = users.filter((u) => isToday(u.created_at)).length;
+    const inactive7Days = users.filter((item) => {
+      const lastActiveAt = getLastActiveAt(item);
+      if (!lastActiveAt) return true;
 
-    const activeToday = users.filter((u) => isToday(u.last_active_at)).length;
+      const date = new Date(lastActiveAt);
+      if (Number.isNaN(date.getTime())) return true;
 
-    const inactive7Days = users.filter((u) => {
-      if (!u.last_active_at) return true;
-      return new Date(u.last_active_at) < sevenDaysAgo;
+      return date < sevenDaysAgo;
     }).length;
 
-    const trialUsers = users.filter((u) => u.plan === "trial").length;
-    const starterUsers = users.filter((u) => u.plan === "starter").length;
-    const proUsers = users.filter((u) => u.plan === "pro").length;
-    const premiumUsers = users.filter((u) => u.plan === "premium").length;
-    const agencyUsers = users.filter((u) => u.plan === "agency").length;
+    const trialUsers = users.filter((item) => getUserPlan(item) === "trial").length;
+    const starterUsers = users.filter((item) => getUserPlan(item) === "starter").length;
+    const proUsers = users.filter((item) => getUserPlan(item) === "pro").length;
+    const premiumUsers = users.filter((item) => getUserPlan(item) === "premium").length;
+    const agencyUsers = users.filter((item) => getUserPlan(item) === "agency").length;
 
-    const earlyAccessUsers = users.filter((u) => {
-      return (
-        u.plan_status === "early_access" ||
-        u.billing_status === "free_beta" ||
-        (u.plan && u.plan !== "trial")
-      );
-    }).length;
-
-    const paidUsers = users.filter((u) => {
-      return u.billing_status === "paid";
-    }).length;
+    const paidPlanUsers = users.filter((item) => PAID_PLANS.includes(getUserPlan(item))).length;
+    const confirmedPaidUsers = users.filter((item) => item.billing_status === "paid").length;
+    const adminUsers = users.filter((item) => item.role === "admin").length;
 
     return {
       totalUsers,
@@ -143,15 +178,16 @@ export default function Admin() {
       proUsers,
       premiumUsers,
       agencyUsers,
-      earlyAccessUsers,
-      paidUsers,
+      paidPlanUsers,
+      confirmedPaidUsers,
+      adminUsers,
     };
   }, [users]);
 
   if (isLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
       </div>
     );
   }
@@ -161,15 +197,14 @@ export default function Admin() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Admin Dashboard</p>
-          <h1 className="text-3xl font-bold tracking-tight">
-            GigVorx Analytics
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">GigVorx Analytics</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Signed in as {user?.email}
+            Signed in as {user?.email || "admin user"}
           </p>
         </div>
 
         <button
+          type="button"
           onClick={loadAdminData}
           className="inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
         >
@@ -210,28 +245,28 @@ export default function Admin() {
           icon={Clock}
         />
         <StatCard
-          title="Early Access Users"
-          value={stats.earlyAccessUsers}
-          description="Free beta plan users"
+          title="Trial Users"
+          value={stats.trialUsers}
+          description="Users in 7-day trial"
           icon={Crown}
         />
         <StatCard
-          title="Paid Users"
-          value={stats.paidUsers}
-          description="Will work after Razorpay/Stripe"
+          title="Paid Plan Users"
+          value={stats.paidPlanUsers}
+          description="Starter, Pro, Premium, or Agency"
+          icon={CreditCard}
+        />
+        <StatCard
+          title="Confirmed Paid"
+          value={stats.confirmedPaidUsers}
+          description="Users marked billing_status paid"
           icon={CreditCard}
         />
         <StatCard
           title="Admin Users"
-          value={users.filter((u) => u.role === "admin").length}
+          value={stats.adminUsers}
           description="Users with admin access"
           icon={ShieldCheck}
-        />
-        <StatCard
-          title="Events Tracked"
-          value={events.length}
-          description="Latest 50 events loaded"
-          icon={Activity}
         />
       </div>
 
@@ -266,19 +301,19 @@ export default function Admin() {
             </thead>
 
             <tbody>
-              {users.slice(0, 20).map((u) => (
-                <tr key={u.id} className="border-b last:border-0">
-                  <td className="p-4">{u.name || "—"}</td>
-                  <td className="p-4">{u.email || "—"}</td>
-                  <td className="p-4 capitalize">{u.plan || "trial"}</td>
-                  <td className="p-4 capitalize">{u.role || "user"}</td>
+              {users.slice(0, 20).map((item) => (
+                <tr key={item.id || item.email} className="border-b last:border-0">
+                  <td className="p-4">{getUserName(item)}</td>
+                  <td className="p-4">{getUserEmail(item)}</td>
+                  <td className="p-4 capitalize">{getUserPlan(item)}</td>
+                  <td className="p-4 capitalize">{item.role || "user"}</td>
                   <td className="p-4">
                     <span className="rounded-full border px-2 py-1 text-xs">
-                      {u.plan_status || u.billing_status || "trial"}
+                      {item.plan_status || item.billing_status || "trial"}
                     </span>
                   </td>
-                  <td className="p-4">{formatDate(u.created_at)}</td>
-                  <td className="p-4">{formatDate(u.last_active_at)}</td>
+                  <td className="p-4">{formatDate(getCreatedAt(item))}</td>
+                  <td className="p-4">{formatDate(getLastActiveAt(item))}</td>
                 </tr>
               ))}
 
@@ -315,15 +350,15 @@ export default function Admin() {
 
             <tbody>
               {events.map((event) => (
-                <tr key={event.id} className="border-b last:border-0">
-                  <td className="p-4 font-medium">{event.event_name}</td>
-                  <td className="p-4 text-muted-foreground">{event.user_id || "—"}</td>
+                <tr key={event.id || `${getEventName(event)}-${event.created_at}`} className="border-b last:border-0">
+                  <td className="p-4 font-medium">{getEventName(event)}</td>
+                  <td className="p-4 text-muted-foreground">{event.user_id || event.userId || "—"}</td>
                   <td className="p-4 text-muted-foreground">
                     <pre className="max-w-[360px] overflow-x-auto whitespace-pre-wrap text-xs">
-                      {JSON.stringify(event.event_data || {}, null, 2)}
+                      {JSON.stringify(getEventData(event), null, 2)}
                     </pre>
                   </td>
-                  <td className="p-4">{formatDate(event.created_at)}</td>
+                  <td className="p-4">{formatDate(getCreatedAt(event))}</td>
                 </tr>
               ))}
 
