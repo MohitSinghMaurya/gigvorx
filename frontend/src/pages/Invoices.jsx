@@ -1,36 +1,38 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import {
+  Edit2,
+  Loader2,
+  MessageCircle,
+  Plus,
+  Receipt,
+  Search,
+  Trash2,
+} from "lucide-react";
+
 import { useAuth } from "@/lib/AuthContext";
-import { supabase, isSupabaseEnabled } from "@/lib/supabase";
-import { readGlobal, writeGlobal } from "@/lib/storage";
-import { formatCurrency, formatDate } from "@/lib/format";
 import { useCurrency } from "@/lib/CurrencyContext";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { supabase } from "@/lib/supabase";
 import { usePlanLimits } from "@/lib/usePlanLimits";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+
+import PaymentReminderDialog from "@/components/PaymentReminderDialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
-  AlertDialogTrigger,
+  AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Plus,
-  Search,
-  Receipt,
-  Edit2,
-  Trash2,
-  Loader2,
-  Crown,
-} from "lucide-react";
-import { toast } from "sonner";
 
 const STATUS_STYLES = {
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -39,14 +41,32 @@ const STATUS_STYLES = {
   draft: "bg-muted text-muted-foreground border-border",
 };
 
-const STATUS_FILTERS = ["all", "draft", "pending", "paid", "overdue"];
+function isOverdue(invoice) {
+  if (!invoice?.due_date) return false;
+  if (invoice.status === "paid" || invoice.status === "draft") return false;
 
-function getCreatedAt(invoice) {
-  return invoice?.created_at || invoice?.createdAt;
+  const dueDate = new Date(invoice.due_date);
+  if (Number.isNaN(dueDate.getTime())) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dueDate.setHours(0, 0, 0, 0);
+
+  return dueDate < today;
 }
 
-function getInvoiceTotal(invoice) {
-  return parseFloat(invoice?.total) || 0;
+function getInvoiceStatus(invoice) {
+  if (invoice?.status === "paid") return "paid";
+  if (invoice?.status === "draft") return "draft";
+  if (invoice?.status === "overdue" || isOverdue(invoice)) return "overdue";
+  return "pending";
+}
+
+function getStatusLabel(status) {
+  if (status === "paid") return "Paid";
+  if (status === "overdue") return "Overdue";
+  if (status === "draft") return "Draft";
+  return "Pending";
 }
 
 export default function Invoices() {
@@ -60,76 +80,48 @@ export default function Invoices() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [deleting, setDeleting] = useState(null);
+  const [reminderInvoice, setReminderInvoice] = useState(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
-  const fetchInvoices = useCallback(async () => {
-    if (!user?.id) return;
+  useEffect(() => {
+    if (user?.id) fetchInvoices();
+  }, [user]);
 
+  const fetchInvoices = async () => {
     setLoading(true);
 
     try {
-      if (isSupabaseEnabled) {
-        const { data, error } = await supabase
-          .from("invoices")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        setInvoices(data || []);
-      } else {
-        const localInvoices = readGlobal("invoices", [])
-          .filter(
-            (invoice) =>
-              invoice?.user_id === user.id || invoice?.userId === user.id
-          )
-          .sort(
-            (a, b) => new Date(getCreatedAt(b)) - new Date(getCreatedAt(a))
-          );
-
-        setInvoices(localInvoices);
-      }
+      setInvoices(data || []);
     } catch (err) {
-      console.error("Failed to load invoices:", err);
       toast.error("Failed to load invoices");
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  };
 
-  useEffect(() => {
-    fetchInvoices();
-  }, [fetchInvoices]);
-
-  const handleDelete = async (invoiceId) => {
-    if (!user?.id) return;
-
-    setDeleting(invoiceId);
+  const handleDelete = async (invId) => {
+    setDeleting(invId);
 
     try {
-      if (isSupabaseEnabled) {
-        const { error } = await supabase
-          .from("invoices")
-          .delete()
-          .eq("id", invoiceId)
-          .eq("user_id", user.id);
+      const { error } = await supabase
+        .from("invoices")
+        .delete()
+        .eq("id", invId)
+        .eq("user_id", user.id);
 
-        if (error) throw error;
-      } else {
-        writeGlobal(
-          "invoices",
-          readGlobal("invoices", []).filter(
-            (invoice) => invoice.id !== invoiceId
-          )
-        );
-      }
+      if (error) throw error;
 
-      setInvoices((prev) =>
-        prev.filter((invoice) => invoice.id !== invoiceId)
-      );
+      setInvoices((prev) => prev.filter((invoice) => invoice.id !== invId));
       toast.success("Invoice deleted");
     } catch (err) {
-      console.error("Failed to delete invoice:", err);
       toast.error("Failed to delete invoice");
     } finally {
       setDeleting(null);
@@ -138,7 +130,9 @@ export default function Invoices() {
 
   const handleNewInvoice = () => {
     if (!canAddInvoice) {
-      toast.error("Invoice limit reached. Upgrade to create more invoices.");
+      toast.error(
+        `You've used all ${limits.invoices} invoices this month. Upgrade to Pro for unlimited invoices.`
+      );
       navigate("/pricing-app");
       return;
     }
@@ -146,51 +140,76 @@ export default function Invoices() {
     navigate("/invoices/new");
   };
 
+  const openReminder = (invoice) => {
+    const status = getInvoiceStatus(invoice);
+
+    if (status === "paid") {
+      toast.info("This invoice is already paid");
+      return;
+    }
+
+    if (status === "draft") {
+      toast.info("Reminder is available after invoice is pending or overdue");
+      return;
+    }
+
+    setReminderInvoice({
+      ...invoice,
+      status,
+      clientName: invoice.client_name,
+      clientEmail: invoice.client_email,
+      invoiceNumber: invoice.invoice_number,
+      dueDate: invoice.due_date,
+    });
+    setReminderOpen(true);
+  };
+
   const filtered = useMemo(() => {
-    const search = query.trim().toLowerCase();
-
     return invoices.filter((invoice) => {
-      const matchesQuery =
-        !search ||
-        invoice.invoice_number?.toLowerCase().includes(search) ||
-        invoice.client_name?.toLowerCase().includes(search) ||
-        invoice.client_email?.toLowerCase().includes(search);
+      const status = getInvoiceStatus(invoice);
 
-      const matchesStatus = filter === "all" || invoice.status === filter;
+      const matchesQuery =
+        !query ||
+        invoice.invoice_number?.toLowerCase().includes(query.toLowerCase()) ||
+        invoice.client_name?.toLowerCase().includes(query.toLowerCase()) ||
+        invoice.client_email?.toLowerCase().includes(query.toLowerCase());
+
+      const matchesStatus = filter === "all" || status === filter;
 
       return matchesQuery && matchesStatus;
     });
   }, [invoices, query, filter]);
 
   const summary = useMemo(() => {
-    const paid = filtered
-      .filter((invoice) => invoice.status === "paid")
-      .reduce((sum, invoice) => sum + getInvoiceTotal(invoice), 0);
+    return filtered.reduce(
+      (acc, invoice) => {
+        const status = getInvoiceStatus(invoice);
+        const total = Number(invoice.total || 0);
 
-    const pending = filtered
-      .filter((invoice) => invoice.status === "pending")
-      .reduce((sum, invoice) => sum + getInvoiceTotal(invoice), 0);
+        acc.total += total;
 
-    const total = filtered.reduce(
-      (sum, invoice) => sum + getInvoiceTotal(invoice),
-      0
+        if (status === "paid") acc.paid += total;
+        if (status === "pending") acc.pending += total;
+        if (status === "overdue") acc.overdue += total;
+
+        return acc;
+      },
+      {
+        paid: 0,
+        pending: 0,
+        overdue: 0,
+        total: 0,
+      }
     );
-
-    return { paid, pending, total };
   }, [filtered]);
-
-  const invoicesLeft =
-    limits.invoices === Infinity
-      ? Infinity
-      : Math.max(0, limits.invoices - usage.invoices);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
           <p className="mt-1 text-muted-foreground">
-            Track every invoice from draft to paid.
+            Track pending, paid, and overdue invoices with payment reminders.
           </p>
         </div>
 
@@ -226,7 +245,8 @@ export default function Invoices() {
             <span>
               You have{" "}
               <span className="font-semibold">
-                {invoicesLeft} invoice{invoicesLeft !== 1 ? "s" : ""}
+                {limits.invoices - usage.invoices} invoice
+                {limits.invoices - usage.invoices !== 1 ? "s" : ""}
               </span>{" "}
               left this month.
             </span>
@@ -237,7 +257,6 @@ export default function Invoices() {
               onClick={() => navigate("/pricing-app")}
               className="h-7 border-amber-300 text-xs text-amber-700 hover:bg-amber-100"
             >
-              <Crown className="mr-1 h-3.5 w-3.5" />
               Upgrade
             </Button>
           </div>
@@ -246,7 +265,8 @@ export default function Invoices() {
       {!isPro && usage.invoices >= limits.invoices && (
         <div className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
           <span className="font-semibold">
-            Monthly invoice limit reached. Upgrade to create more invoices.
+            Monthly invoice limit reached. Upgrade to Pro for unlimited
+            invoices.
           </span>
 
           <Button
@@ -262,18 +282,20 @@ export default function Invoices() {
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
           <Input
-            placeholder="Search by invoice # or client..."
+            placeholder="Search by invoice, client, or email..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
             className="pl-9"
           />
         </div>
 
-        <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
-          {STATUS_FILTERS.map((status) => (
+        <div className="flex gap-1 rounded-lg bg-muted p-1">
+          {["all", "draft", "pending", "paid", "overdue"].map((status) => (
             <button
               key={status}
+              type="button"
               onClick={() => setFilter(status)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
                 filter === status
@@ -303,7 +325,7 @@ export default function Invoices() {
 
           <p className="mb-5 text-sm text-muted-foreground">
             {invoices.length === 0
-              ? "Send your first professional invoice and track payment status."
+              ? "Send your first professional invoice in under a minute."
               : "Try a different filter or search term."}
           </p>
 
@@ -331,118 +353,150 @@ export default function Invoices() {
                   <th className="p-4 text-left font-semibold">Due Date</th>
                   <th className="p-4 text-right font-semibold">Amount</th>
                   <th className="p-4 text-center font-semibold">Status</th>
-                  <th className="w-20" />
+                  <th className="w-28 p-4 text-right font-semibold">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y">
-                {filtered.map((invoice) => (
-                  <tr
-                    key={invoice.id}
-                    className="cursor-pointer hover:bg-muted/20"
-                    onClick={() => navigate(`/invoices/${invoice.id}`)}
-                  >
-                    <td className="p-4 font-mono font-semibold">
-                      {invoice.invoice_number || "—"}
-                    </td>
+                {filtered.map((invoice) => {
+                  const status = getInvoiceStatus(invoice);
 
-                    <td className="p-4">
-                      <div>
-                        <p className="font-medium">
-                          {invoice.client_name || "—"}
-                        </p>
+                  return (
+                    <tr
+                      key={invoice.id}
+                      className="cursor-pointer hover:bg-muted/20"
+                      onClick={() => navigate(`/invoices/${invoice.id}`)}
+                    >
+                      <td className="p-4 font-mono font-semibold">
+                        {invoice.invoice_number || "—"}
+                      </td>
 
-                        {invoice.client_gst && (
-                          <p className="text-xs text-muted-foreground">
-                            GST: {invoice.client_gst}
+                      <td className="p-4">
+                        <div>
+                          <p className="font-medium">
+                            {invoice.client_name || "—"}
                           </p>
-                        )}
-                      </div>
-                    </td>
 
-                    <td className="p-4 text-muted-foreground">
-                      {formatDate(invoice.issue_date || getCreatedAt(invoice))}
-                    </td>
+                          {invoice.client_email && (
+                            <p className="text-xs text-muted-foreground">
+                              {invoice.client_email}
+                            </p>
+                          )}
 
-                    <td className="p-4 text-muted-foreground">
-                      {formatDate(invoice.due_date)}
-                    </td>
+                          {invoice.client_gst && (
+                            <p className="text-xs text-muted-foreground">
+                              GST: {invoice.client_gst}
+                            </p>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="p-4 text-right font-semibold">
-                      {formatCurrency(getInvoiceTotal(invoice), currency)}
-                    </td>
+                      <td className="p-4 text-muted-foreground">
+                        {formatDate(invoice.issue_date || invoice.created_at)}
+                      </td>
 
-                    <td className="p-4 text-center">
-                      <Badge
-                        variant="outline"
-                        className={`capitalize ${
-                          STATUS_STYLES[invoice.status || "draft"] ||
-                          STATUS_STYLES.draft
+                      <td
+                        className={`p-4 ${
+                          status === "overdue"
+                            ? "font-medium text-rose-600"
+                            : "text-muted-foreground"
                         }`}
                       >
-                        {invoice.status || "draft"}
-                      </Badge>
-                    </td>
+                        {formatDate(invoice.due_date)}
+                      </td>
 
-                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => navigate(`/invoices/${invoice.id}`)}
-                          title="Edit"
+                      <td className="p-4 text-right font-semibold">
+                        {formatCurrency(invoice.total || 0, currency)}
+                      </td>
+
+                      <td className="p-4 text-center">
+                        <Badge
+                          variant="outline"
+                          className={`capitalize ${
+                            STATUS_STYLES[status] || STATUS_STYLES.draft
+                          }`}
                         >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
+                          {getStatusLabel(status)}
+                        </Badge>
+                      </td>
 
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
+                      <td
+                        className="p-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <div className="flex justify-end gap-1">
+                          {status !== "paid" && status !== "draft" && (
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="hover:text-destructive"
-                              title="Delete"
+                              onClick={() => openReminder(invoice)}
+                              title="Payment reminder"
                             >
-                              {deleting === invoice.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
-                              )}
+                              <MessageCircle className="h-3.5 w-3.5" />
                             </Button>
-                          </AlertDialogTrigger>
+                          )}
 
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Delete this invoice?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently delete invoice{" "}
-                                {invoice.invoice_number || "—"} and cannot be
-                                undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => navigate(`/invoices/${invoice.id}`)}
+                            title="Edit"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
 
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDelete(invoice.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="hover:text-destructive"
+                                title="Delete"
                               >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                                {deleting === invoice.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </AlertDialogTrigger>
+
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete this invoice?
+                                </AlertDialogTitle>
+
+                                <AlertDialogDescription>
+                                  This will permanently delete invoice{" "}
+                                  {invoice.invoice_number} and cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(invoice.id)}
+                                  className="bg-destructive text-destructive-foreground"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          <div className="flex flex-col justify-between gap-3 border-t bg-muted/20 px-4 py-3 text-sm sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 border-t bg-muted/20 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span className="text-muted-foreground">
               {filtered.length} invoice{filtered.length !== 1 ? "s" : ""}
             </span>
@@ -463,8 +517,15 @@ export default function Invoices() {
               </span>
 
               <span>
+                Overdue:{" "}
+                <span className="font-semibold text-rose-600">
+                  {formatCurrency(summary.overdue, currency)}
+                </span>
+              </span>
+
+              <span>
                 Total:{" "}
-                <span className="font-semibold">
+                <span className="font-semibold text-foreground">
                   {formatCurrency(summary.total, currency)}
                 </span>
               </span>
@@ -472,6 +533,12 @@ export default function Invoices() {
           </div>
         </Card>
       )}
+
+      <PaymentReminderDialog
+        invoice={reminderInvoice}
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+      />
     </div>
   );
 }
