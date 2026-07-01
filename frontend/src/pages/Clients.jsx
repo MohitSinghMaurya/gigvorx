@@ -1,89 +1,197 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseEnabled } from "@/lib/supabase";
+import { readGlobal, writeGlobal } from "@/lib/storage";
 import { formatDate } from "@/lib/format";
+import { usePlanLimits } from "@/lib/usePlanLimits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import {
-  AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader,
-  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Users, Edit2, Trash2, Mail, Phone, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Users,
+  Edit2,
+  Trash2,
+  Mail,
+  Phone,
+  Loader2,
+  Crown,
+} from "lucide-react";
 import { toast } from "sonner";
+
+function isActiveClient(client) {
+  return client?.isLead !== true && client?.is_lead !== true;
+}
+
+function getClientCreatedAt(client) {
+  return client?.created_at || client?.createdAt;
+}
 
 export default function Clients() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { canAddClient, clientsLeft, isTrial, isStarter } = usePlanLimits();
 
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [deleting, setDeleting] = useState(null);
 
-  useEffect(() => {
-    if (user?.id) fetchClients();
-  }, [user]);
+  const fetchClients = useCallback(async () => {
+    if (!user?.id) return;
 
-  const fetchClients = async () => {
     setLoading(true);
+
     try {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      setClients(data || []);
+      if (isSupabaseEnabled) {
+        const { data, error } = await supabase
+          .from("clients")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        setClients((data || []).filter(isActiveClient));
+      } else {
+        const localClients = readGlobal("clients", [])
+          .filter((client) => client?.user_id === user.id || client?.userId === user.id)
+          .filter(isActiveClient)
+          .sort(
+            (a, b) =>
+              new Date(getClientCreatedAt(b)) - new Date(getClientCreatedAt(a))
+          );
+
+        setClients(localClients);
+      }
     } catch (err) {
+      console.error("Failed to load clients:", err);
       toast.error("Failed to load clients");
     } finally {
       setLoading(false);
     }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  const handleAddClient = () => {
+    if (!canAddClient) {
+      toast.error("Client limit reached. Upgrade to add more clients.");
+      navigate("/pricing-app");
+      return;
+    }
+
+    navigate("/clients/new");
   };
 
   const handleDelete = async (clientId, clientName) => {
+    if (!user?.id) return;
+
     setDeleting(clientId);
+
     try {
-      const { error } = await supabase
-        .from("clients")
-        .delete()
-        .eq("id", clientId)
-        .eq("user_id", user.id);
-      if (error) throw error;
-      setClients(prev => prev.filter(c => c.id !== clientId));
-      toast.success(`${clientName} deleted`);
+      if (isSupabaseEnabled) {
+        const { error } = await supabase
+          .from("clients")
+          .delete()
+          .eq("id", clientId)
+          .eq("user_id", user.id);
+
+        if (error) throw error;
+      } else {
+        const allClients = readGlobal("clients", []);
+        writeGlobal(
+          "clients",
+          allClients.filter((client) => client.id !== clientId)
+        );
+      }
+
+      setClients((prev) => prev.filter((client) => client.id !== clientId));
+      toast.success(`${clientName || "Client"} deleted`);
     } catch (err) {
+      console.error("Failed to delete client:", err);
       toast.error("Failed to delete client");
     } finally {
       setDeleting(null);
     }
   };
 
-  const filtered = clients.filter(c =>
-    c.name?.toLowerCase().includes(query.toLowerCase()) ||
-    c.email?.toLowerCase().includes(query.toLowerCase()) ||
-    c.service?.toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const search = query.trim().toLowerCase();
+
+    if (!search) return clients;
+
+    return clients.filter((client) => {
+      return (
+        client.name?.toLowerCase().includes(search) ||
+        client.email?.toLowerCase().includes(search) ||
+        client.phone?.toLowerCase().includes(search) ||
+        client.service?.toLowerCase().includes(search) ||
+        client.source?.toLowerCase().includes(search)
+      );
+    });
+  }, [clients, query]);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
-          <p className="text-muted-foreground mt-1">All your clients in one place.</p>
+          <p className="mt-1 text-muted-foreground">
+            Keep every client record, contact detail, and service history in one
+            place.
+          </p>
         </div>
+
         <Button
-          onClick={() => navigate("/clients/new")}
-          className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white"
+          onClick={handleAddClient}
+          className="bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
         >
-          <Plus className="w-4 h-4 mr-1.5" />Add Client
+          <Plus className="mr-1.5 h-4 w-4" />
+          Add Client
         </Button>
       </div>
 
+      {(isTrial || isStarter) && (
+        <Card className="flex flex-col justify-between gap-3 border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              Client limit: {clientsLeft === Infinity ? "Unlimited" : `${clientsLeft} left`}
+            </p>
+            <p className="text-xs text-amber-700">
+              Upgrade when you need more client records for your workflow.
+            </p>
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate("/pricing-app")}
+            className="border-amber-300 bg-white text-amber-700 hover:bg-amber-100"
+          >
+            <Crown className="mr-1.5 h-4 w-4" />
+            View plans
+          </Button>
+        </Card>
+      )}
+
       <div className="relative max-w-sm">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search clients..."
           value={query}
@@ -92,98 +200,120 @@ export default function Clients() {
         />
       </div>
 
-      {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 text-[#FF6B00] animate-spin" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#FF6B00]" />
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && filtered.length === 0 && (
-        <Card className="p-12 text-center border-dashed">
-          <Users className="w-10 h-10 mx-auto text-muted-foreground/40 mb-4" />
-          <p className="font-semibold mb-1">
+        <Card className="border-dashed p-12 text-center">
+          <Users className="mx-auto mb-4 h-10 w-10 text-muted-foreground/40" />
+          <p className="mb-1 font-semibold">
             {clients.length === 0 ? "No clients yet" : "No matches"}
           </p>
-          <p className="text-sm text-muted-foreground mb-5">
+          <p className="mb-5 text-sm text-muted-foreground">
             {clients.length === 0
-              ? "Add your first client to get started."
+              ? "Add your first client to start managing briefs, invoices, and follow-ups."
               : "Try a different search term."}
           </p>
+
           {clients.length === 0 && (
             <Button
-              onClick={() => navigate("/clients/new")}
-              className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white"
+              onClick={handleAddClient}
+              className="bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
             >
-              <Plus className="w-4 h-4 mr-1.5" />Add Client
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Client
             </Button>
           )}
         </Card>
       )}
 
-      {/* Clients table */}
       {!loading && filtered.length > 0 && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/30">
                 <tr>
-                  <th className="text-left p-4 font-semibold">Name</th>
-                  <th className="text-left p-4 font-semibold">Contact</th>
-                  <th className="text-left p-4 font-semibold">Service</th>
-                  <th className="text-left p-4 font-semibold">Source</th>
-                  <th className="text-left p-4 font-semibold">Added</th>
-                  <th className="w-20"></th>
+                  <th className="p-4 text-left font-semibold">Name</th>
+                  <th className="p-4 text-left font-semibold">Contact</th>
+                  <th className="p-4 text-left font-semibold">Service</th>
+                  <th className="p-4 text-left font-semibold">Source</th>
+                  <th className="p-4 text-left font-semibold">Added</th>
+                  <th className="w-20" />
                 </tr>
               </thead>
+
               <tbody className="divide-y">
-                {filtered.map(c => (
+                {filtered.map((client) => (
                   <tr
-                    key={c.id}
-                    className="hover:bg-muted/20 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/clients/${c.id}/edit`)}
+                    key={client.id}
+                    className="cursor-pointer transition-colors hover:bg-muted/20"
+                    onClick={() => navigate(`/clients/${client.id}/edit`)}
                   >
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-md bg-[#FF6B00] text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
-                          {(c.name || "?").slice(0, 2).toUpperCase()}
+                        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-[#FF6B00] text-xs font-bold text-white">
+                          {(client.name || "?").slice(0, 2).toUpperCase()}
                         </div>
+
                         <div>
-                          <p className="font-semibold">{c.name}</p>
-                          {c.status && (
-                            <p className="text-xs text-muted-foreground capitalize">{c.status}</p>
+                          <p className="font-semibold">
+                            {client.name || "Unnamed Client"}
+                          </p>
+                          {client.status && (
+                            <p className="text-xs capitalize text-muted-foreground">
+                              {client.status}
+                            </p>
                           )}
                         </div>
                       </div>
                     </td>
+
                     <td className="p-4">
                       <div className="space-y-0.5 text-xs text-muted-foreground">
-                        {c.email && (
+                        {client.email && (
                           <div className="flex items-center gap-1.5">
-                            <Mail className="w-3 h-3" />{c.email}
+                            <Mail className="h-3 w-3" />
+                            {client.email}
                           </div>
                         )}
-                        {c.phone && (
+
+                        {client.phone && (
                           <div className="flex items-center gap-1.5">
-                            <Phone className="w-3 h-3" />{c.phone}
+                            <Phone className="h-3 w-3" />
+                            {client.phone}
                           </div>
                         )}
+
+                        {!client.email && !client.phone && "—"}
                       </div>
                     </td>
-                    <td className="p-4 text-muted-foreground">{c.service || "—"}</td>
-                    <td className="p-4 text-muted-foreground capitalize">{c.source || "—"}</td>
-                    <td className="p-4 text-muted-foreground">{formatDate(c.created_at)}</td>
+
+                    <td className="p-4 text-muted-foreground">
+                      {client.service || "—"}
+                    </td>
+
+                    <td className="p-4 capitalize text-muted-foreground">
+                      {client.source || "—"}
+                    </td>
+
+                    <td className="p-4 text-muted-foreground">
+                      {formatDate(getClientCreatedAt(client))}
+                    </td>
+
                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => navigate(`/clients/${c.id}/edit`)}
+                          onClick={() => navigate(`/clients/${client.id}/edit`)}
                           title="Edit"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="h-3.5 w-3.5" />
                         </Button>
+
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -192,24 +322,33 @@ export default function Clients() {
                               className="text-muted-foreground hover:text-destructive"
                               title="Delete"
                             >
-                              {deleting === c.id
-                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                : <Trash2 className="w-3.5 h-3.5" />
-                              }
+                              {deleting === client.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
                             </Button>
                           </AlertDialogTrigger>
+
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Delete this client?</AlertDialogTitle>
+                              <AlertDialogTitle>
+                                Delete this client?
+                              </AlertDialogTitle>
                               <AlertDialogDescription>
-                                This will permanently remove {c.name}. This cannot be undone.
+                                This will permanently remove{" "}
+                                {client.name || "this client"}. This cannot be
+                                undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
+
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => handleDelete(c.id, c.name)}
-                                className="bg-destructive text-destructive-foreground"
+                                onClick={() =>
+                                  handleDelete(client.id, client.name)
+                                }
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Delete
                               </AlertDialogAction>
@@ -223,7 +362,8 @@ export default function Clients() {
               </tbody>
             </table>
           </div>
-          <div className="border-t px-4 py-3 bg-muted/20 text-sm text-muted-foreground">
+
+          <div className="border-t bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
             {filtered.length} client{filtered.length !== 1 ? "s" : ""}
           </div>
         </Card>
