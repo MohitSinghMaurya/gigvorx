@@ -1,128 +1,216 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-    margin: 0;
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv11', 'ss01', 'ss03';
+  margin: 0;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01", "ss03";
 }
 
-code, .font-mono {
-    font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
-}
-
-@layer base {
-    :root {
-        /* light theme · sky blue + electric blue + ink */
-        --background: 210 40% 99%;
-        --foreground: 222 47% 11%;
-        --card: 0 0% 100%;
-        --card-foreground: 222 47% 11%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
-        --primary: 217 91% 55%;          /* electric blue */
-        --primary-foreground: 0 0% 100%;
-        --secondary: 210 40% 96%;        /* light gray-blue */
-        --secondary-foreground: 222 47% 11%;
-        --muted: 210 40% 96%;
-        --muted-foreground: 215 16% 47%;
-        --accent: 199 89% 95%;           /* sky blue tint */
-        --accent-foreground: 217 91% 35%;
-        --destructive: 0 84% 60%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 214 32% 91%;
-        --input: 214 32% 91%;
-        --ring: 217 91% 55%;
-
-        /* brand tokens */
-        --brand: 217 91% 55%;            /* primary blue */
-        --brand-foreground: 0 0% 100%;
-        --brand-sky: 199 89% 60%;        /* sky blue */
-        --brand-ink: 222 47% 11%;        /* near-black navy */
-        --brand-navy: 224 71% 4%;        /* deep navy (logo bg) */
-
-        --success: 158 64% 42%;
-        --warning: 35 92% 52%;
-        --info: 217 91% 60%;
-
-        --chart-1: 217 91% 55%;
-        --chart-2: 199 89% 55%;
-        --chart-3: 158 64% 42%;
-        --chart-4: 35 92% 52%;
-        --chart-5: 339 90% 51%;
-
-        --radius: 0.75rem;
-    }
+code,
+.font-mono {
+  font-family: "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
 }
 
 @layer base {
-    * { @apply border-border; }
-    html, body, #root { height: 100%; }
-    body {
-        @apply bg-background text-foreground;
-        font-feature-settings: 'rlig' 1, 'calt' 1, 'cv11' 1;
-    }
-    h1, h2, h3, h4 { letter-spacing: -0.02em; }
+  :root {
+    --background: 210 40% 99%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 199 89% 95%;
+    --accent-foreground: 217 91% 35%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 55%;
+
+    --brand: 217 91% 55%;
+    --brand-foreground: 0 0% 100%;
+    --brand-sky: 199 89% 60%;
+    --brand-ink: 222 47% 11%;
+    --brand-navy: 224 71% 4%;
+
+    --success: 158 64% 42%;
+    --warning: 35 92% 52%;
+    --info: 217 91% 60%;
+
+    --chart-1: 217 91% 55%;
+    --chart-2: 199 89% 55%;
+    --chart-3: 158 64% 42%;
+    --chart-4: 35 92% 52%;
+    --chart-5: 339 90% 51%;
+
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
+  }
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(214 32% 85%); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(217 91% 55% / 0.4); }
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-::selection { background: hsl(var(--brand) / 0.2); color: hsl(var(--brand-ink)); }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-/* Grid / dot backgrounds */
+::-webkit-scrollbar-thumb {
+  background: hsl(214 32% 85%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(217 91% 55% / 0.4);
+}
+
+::selection {
+  background: hsl(var(--brand) / 0.2);
+  color: hsl(var(--brand-ink));
+}
+
 .bg-grid {
-    background-image:
-        linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
-        linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
-    background-size: 32px 32px;
-}
-.bg-dot {
-    background-image: radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px);
-    background-size: 20px 20px;
+  background-image:
+    linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 
-/* Brand gradient text — matches logo */
+.bg-dot {
+  background-image: radial-gradient(
+    circle,
+    hsl(var(--border)) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
 .text-gradient {
-    background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(199 89% 60%) 50%, hsl(263 80% 65%) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+  background: linear-gradient(
+    135deg,
+    hsl(217 91% 55%) 0%,
+    hsl(199 89% 60%) 50%,
+    hsl(263 80% 65%) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .bg-brand-gradient {
-    background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(199 89% 55%) 100%);
+  background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(199 89% 55%) 100%);
 }
 
 .bg-logo-gradient {
-    background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(263 80% 60%) 100%);
+  background: linear-gradient(135deg, hsl(217 91% 55%) 0%, hsl(263 80% 60%) 100%);
 }
 
-/* Brief editor prose */
-.brief-prose h1, .brief-prose h2, .brief-prose h3 { font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.5rem; }
-.brief-prose h1 { font-size: 1.875rem; }
-.brief-prose h2 { font-size: 1.5rem; }
-.brief-prose h3 { font-size: 1.25rem; }
-.brief-prose p { margin-bottom: 0.75rem; line-height: 1.7; }
-.brief-prose ul, .brief-prose ol { margin: 0.5rem 0 1rem 1.5rem; }
-.brief-prose ul { list-style: disc; }
-.brief-prose ol { list-style: decimal; }
+.brief-prose h1,
+.brief-prose h2,
+.brief-prose h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
 
-@media print { .no-print { display: none !important; } body { background: white; } }
+.brief-prose h1 {
+  font-size: 1.875rem;
+}
 
-@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.animate-fade-up { animation: fadeUp 0.4s ease-out; }
+.brief-prose h2 {
+  font-size: 1.5rem;
+}
 
-[data-debug-wrapper="true"] { display: contents !important; }
+.brief-prose h3 {
+  font-size: 1.25rem;
+}
 
-/* Pipeline column scroll */
-.pipeline-col { scrollbar-width: thin; }
-#emergent-badge { display: none !important; }
+.brief-prose p {
+  margin-bottom: 0.75rem;
+  line-height: 1.7;
+}
+
+.brief-prose ul,
+.brief-prose ol {
+  margin: 0.5rem 0 1rem 1.5rem;
+}
+
+.brief-prose ul {
+  list-style: disc;
+}
+
+.brief-prose ol {
+  list-style: decimal;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.4s ease-out;
+}
+
+[data-debug-wrapper="true"] {
+  display: contents !important;
+}
+
+.pipeline-col {
+  scrollbar-width: thin;
+}
+
+#emergent-badge {
+  display: none !important;
+}
