@@ -4,7 +4,19 @@ import { useAuth } from "@/lib/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Sparkles, Shield, Zap, Crown, Building2, ArrowRight, CreditCard, RotateCcw, Clock } from "lucide-react";
+import {
+  Check,
+  X,
+  Sparkles,
+  Shield,
+  Zap,
+  Crown,
+  Building2,
+  ArrowRight,
+  CreditCard,
+  RotateCcw,
+  Clock,
+} from "lucide-react";
 import { motion } from "framer-motion";
 
 const PLANS = [
@@ -80,11 +92,11 @@ const PLANS = [
     cta: "Start free trial",
     trustLines: ["No credit card required", "Cancel anytime"],
   },
-   {
+  {
     id: "agency",
     name: "Agency",
     priceINR: 3500,
-    priceUSD: 38,
+    priceUSD: 35,
     period: "/mo",
     description: "For growing agencies and teams",
     badge: "Best for Agencies",
@@ -109,7 +121,7 @@ const PLANS = [
 const COMPARISON_FEATURES = [
   { label: "Active clients", starter: "10", pro: "Unlimited", premium: "Unlimited", agency: "Unlimited" },
   { label: "Briefs / invoices per month", starter: "10 each", pro: "Unlimited", premium: "Unlimited", agency: "Unlimited" },
-  { label: "Brief niches", starter: "5", pro: "All 17", premium: "All 17", agency: "All 17" },
+  { label: "Brief niches", starter: "5", pro: "All 26", premium: "All 26", agency: "All 26" },
   { label: "Invoice templates", starter: "1", pro: "3", premium: "All", agency: "All" },
   { label: "Custom branding", starter: "—", pro: "✓", premium: "✓", agency: "✓" },
   { label: "WhatsApp & PDF sharing", starter: "✓", pro: "✓", premium: "✓", agency: "✓" },
@@ -153,21 +165,20 @@ export default function Pricing() {
   return (
     <div className="py-20 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        {/* Header */}
         <div className="text-center mb-12">
           <Badge variant="outline" className="mb-4 px-3 py-1 text-xs font-medium border-blue-200 bg-blue-50 text-blue-700">
             <Sparkles className="w-3 h-3 mr-1" />
-            Start free — No credit card required
+            Start your 7-day trial — No credit card required
           </Badge>
+
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             Simple pricing for <span className="text-gradient">every freelancer</span>
           </h1>
+
           <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
-            Whether you are a solo designer in Mumbai or a 10-person agency in London, 
-            we have a plan that fits. All prices shown in both INR and USD.
+            Start with a 7-day free trial, then choose the plan that fits your freelance or agency workflow.
           </p>
 
-          {/* Billing toggle */}
           <div className="mt-8 inline-flex items-center gap-3 p-1 rounded-xl bg-muted border">
             <button
               onClick={() => setBillingCycle("monthly")}
@@ -177,6 +188,7 @@ export default function Pricing() {
             >
               Monthly
             </button>
+
             <button
               onClick={() => setBillingCycle("yearly")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
@@ -191,15 +203,17 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* Pricing cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
           {PLANS.map((plan, i) => {
-            const priceINR = billingCycle === "yearly" 
-              ? Math.round(plan.priceINR * 12 * (1 - discount) / 12)
-              : plan.priceINR;
-            const priceUSD = billingCycle === "yearly"
-              ? Math.round(plan.priceUSD * 12 * (1 - discount) / 12)
-              : plan.priceUSD;
+            const priceINR =
+              billingCycle === "yearly"
+                ? Math.round(plan.priceINR * 12 * (1 - discount) / 12)
+                : plan.priceINR;
+
+            const priceUSD =
+              billingCycle === "yearly"
+                ? Math.round(plan.priceUSD * 12 * (1 - discount) / 12)
+                : plan.priceUSD;
 
             return (
               <motion.div
@@ -211,16 +225,15 @@ export default function Pricing() {
                 onMouseEnter={() => setHoveredPlan(plan.id)}
                 onMouseLeave={() => setHoveredPlan(null)}
               >
-                <Card 
+                <Card
                   className={`relative p-6 h-full flex flex-col transition-all duration-300 ${
-                    plan.popular 
-                      ? "border-blue-400 shadow-lg shadow-blue-500/10 scale-[1.02]" 
-                      : hoveredPlan === plan.id 
-                        ? "border-foreground/20 shadow-md" 
-                        : ""
+                    plan.popular
+                      ? "border-blue-400 shadow-lg shadow-blue-500/10 scale-[1.02]"
+                      : hoveredPlan === plan.id
+                      ? "border-foreground/20 shadow-md"
+                      : ""
                   }`}
                 >
-                  {/* Popular badge */}
                   {plan.popular && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                       <Badge className="bg-gradient-to-r from-blue-500 to-violet-500 text-white border-0 px-3 py-1 text-xs font-semibold">
@@ -230,7 +243,6 @@ export default function Pricing() {
                     </div>
                   )}
 
-                  {/* Plan badge */}
                   {plan.badge && !plan.popular && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                       <Badge variant="outline" className="bg-background px-3 py-1 text-xs font-semibold border-amber-200 text-amber-700">
@@ -245,7 +257,6 @@ export default function Pricing() {
                     <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
                   </div>
 
-                  {/* DUAL CURRENCY PRICING */}
                   <div className="mb-6">
                     <div className="flex items-baseline gap-2">
                       <span className="text-3xl font-extrabold tracking-tight">
@@ -253,9 +264,11 @@ export default function Pricing() {
                       </span>
                       <span className="text-sm text-muted-foreground">{plan.period}</span>
                     </div>
+
                     <p className="text-sm text-muted-foreground mt-1">
                       (~{formatPriceUSD(priceUSD)}{plan.period})
                     </p>
+
                     {billingCycle === "yearly" && (
                       <p className="text-xs text-emerald-600 mt-1 font-medium">
                         Billed annually — 2 months free
@@ -263,12 +276,11 @@ export default function Pricing() {
                     )}
                   </div>
 
-                  {/* CTA Button */}
                   <Button
                     onClick={() => handleSelectPlan(plan.id)}
                     className={`w-full mb-4 ${
-                      plan.popular 
-                        ? "bg-gradient-to-r from-blue-500 to-violet-500 text-white hover:opacity-90 shadow-sm shadow-blue-500/20" 
+                      plan.popular
+                        ? "bg-gradient-to-r from-blue-500 to-violet-500 text-white hover:opacity-90 shadow-sm shadow-blue-500/20"
                         : ""
                     }`}
                     variant={plan.popular ? "default" : "outline"}
@@ -277,7 +289,6 @@ export default function Pricing() {
                     <ArrowRight className="w-4 h-4 ml-1.5" />
                   </Button>
 
-                  {/* Trust lines */}
                   <div className="space-y-1.5 mb-6">
                     {plan.trustLines.map((line, idx) => (
                       <p key={idx} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
@@ -289,18 +300,28 @@ export default function Pricing() {
                     ))}
                   </div>
 
-                  {/* Features */}
                   <div className="flex-1 space-y-2.5">
                     {plan.features.map((feature, idx) => (
                       <div key={idx} className="flex items-start gap-2.5">
                         {feature.included ? (
-                          <Check className={`w-4 h-4 mt-0.5 shrink-0 ${feature.highlight ? "text-blue-500" : "text-emerald-500"}`} />
+                          <Check
+                            className={`w-4 h-4 mt-0.5 shrink-0 ${
+                              feature.highlight ? "text-blue-500" : "text-emerald-500"
+                            }`}
+                          />
                         ) : (
                           <X className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground/30" />
                         )}
-                        <span className={`text-sm ${
-                          !feature.included ? "text-muted-foreground/50" : feature.highlight ? "font-medium" : ""
-                        }`}>
+
+                        <span
+                          className={`text-sm ${
+                            !feature.included
+                              ? "text-muted-foreground/50"
+                              : feature.highlight
+                              ? "font-medium"
+                              : ""
+                          }`}
+                        >
                           {feature.text}
                           {feature.comingSoon && (
                             <Badge variant="outline" className="ml-1.5 text-[9px] px-1 py-0 border-amber-200 text-amber-600">
@@ -317,7 +338,6 @@ export default function Pricing() {
           })}
         </div>
 
-        {/* Comparison table */}
         <div className="mb-20">
           <h2 className="text-2xl font-bold text-center mb-8">Compare all features</h2>
           <div className="overflow-x-auto">
@@ -346,7 +366,6 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* FAQ / Trust section */}
         <div className="max-w-2xl mx-auto text-center">
           <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
@@ -362,12 +381,13 @@ export default function Pricing() {
               Instant setup
             </span>
           </div>
+
           <p className="mt-6 text-xs text-muted-foreground">
             Questions? Email us at{" "}
             <a href="mailto:gigvorx@gmail.com" className="text-foreground underline">
               gigvorx@gmail.com
-            </a>
-            {" "}or WhatsApp{" "}
+            </a>{" "}
+            or WhatsApp{" "}
             <a href="https://wa.me/918273278896" className="text-foreground underline">
               +91 82732 78896
             </a>
