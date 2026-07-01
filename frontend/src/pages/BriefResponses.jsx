@@ -1,40 +1,42 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "@/lib/AuthContext";
-import { supabase, isSupabaseEnabled } from "@/lib/supabase";
-import { readGlobal } from "@/lib/storage";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  User,
-  Mail,
-  Phone,
-  MessageCircle,
   CheckCircle2,
   Clock,
+  Copy,
+  CreditCard,
+  Download,
   FileText,
   Loader2,
-  Download,
-  Copy,
+  Mail,
+  MessageCircle,
+  Phone,
+  ShieldCheck,
+  User,
 } from "lucide-react";
-import { toast } from "sonner";
 import { jsPDF } from "jspdf";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/lib/AuthContext";
+import { readGlobal } from "@/lib/storage";
+import { isSupabaseEnabled, supabase } from "@/lib/supabase";
 
 function formatDate(dateStr) {
   if (!dateStr) return "";
 
-  try {
-    return new Date(dateStr).toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function normalizeQuestions(value) {
@@ -67,6 +69,14 @@ function normalizeAnswers(value) {
   return value;
 }
 
+function getMeta(brief) {
+  return brief?.answers?.__v1 || {};
+}
+
+function ensureArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function AnswerDisplay({ question, answer }) {
   if (!answer) {
     return <p className="text-sm italic text-white/20">No answer provided</p>;
@@ -78,6 +88,7 @@ function AnswerDisplay({ question, answer }) {
         {answer.map((file, index) => (
           <button
             key={`${file?.url || file?.name || index}`}
+            type="button"
             onClick={() =>
               file?.url && window.open(file.url, "_blank", "noopener,noreferrer")
             }
@@ -105,7 +116,10 @@ function AnswerDisplay({ question, answer }) {
   if (question.type === "link" || question.type === "video") {
     return (
       <button
-        onClick={() => window.open(String(answer), "_blank", "noopener,noreferrer")}
+        type="button"
+        onClick={() =>
+          window.open(String(answer), "_blank", "noopener,noreferrer")
+        }
         className="w-full break-all text-left text-sm text-[#FF6B00] underline"
       >
         {String(answer)}
@@ -114,6 +128,102 @@ function AnswerDisplay({ question, answer }) {
   }
 
   return <p className="whitespace-pre-wrap text-sm text-white">{String(answer)}</p>;
+}
+
+function ScopeReviewCard({ meta }) {
+  const includedWork = ensureArray(meta.includedWork);
+  const excludedWork = ensureArray(meta.excludedWork);
+  const revisionLimit = meta.revisionLimit ?? 0;
+  const revisionsUsed = meta.revisionsUsed ?? 0;
+  const advanceRequired = meta.advanceRequired;
+  const advanceType = meta.advanceType || "percent";
+  const advanceValue = meta.advanceValue || "";
+  const approved = meta.approvalStatus === "approved";
+
+  const hasScope =
+    includedWork.length > 0 ||
+    excludedWork.length > 0 ||
+    revisionLimit ||
+    advanceRequired ||
+    approved;
+
+  if (!hasScope) return null;
+
+  return (
+    <Card className="border-white/10 bg-[#111]">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base text-white">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+          Scope, revisions, and payment
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          {includedWork.length > 0 ? (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+              <p className="mb-2 text-sm font-semibold text-emerald-300">
+                Included work
+              </p>
+              <ul className="space-y-1 text-xs text-emerald-50/80">
+                {includedWork.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {excludedWork.length > 0 ? (
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3">
+              <p className="mb-2 text-sm font-semibold text-rose-300">
+                Not included
+              </p>
+              <ul className="space-y-1 text-xs text-rose-50/80">
+                {excludedWork.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-xs text-white/40">Revisions</p>
+            <p className="mt-1 text-sm font-semibold text-white">
+              {revisionsUsed} / {revisionLimit} used
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="flex items-center gap-1 text-xs text-white/40">
+              <CreditCard className="h-3 w-3" />
+              Advance
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white">
+              {advanceRequired
+                ? `${advanceValue}${advanceType === "percent" ? "%" : ""} required`
+                : "Not required"}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-xs text-white/40">Approval</p>
+            <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-white">
+              {approved ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  Approved
+                </>
+              ) : (
+                "Not approved"
+              )}
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function BriefResponses() {
@@ -135,7 +245,7 @@ export default function BriefResponses() {
       let briefData = null;
       let responsesData = [];
 
-      if (isSupabaseEnabled) {
+      if (isSupabaseEnabled && supabase) {
         const briefResult = await supabase
           .from("briefs")
           .select("*")
@@ -144,7 +254,7 @@ export default function BriefResponses() {
           .single();
 
         if (briefResult.error || !briefResult.data) {
-          toast.error("Brief not found");
+          toast.error("Brief not found.");
           navigate("/briefs");
           return;
         }
@@ -167,7 +277,7 @@ export default function BriefResponses() {
         );
 
         if (!briefData) {
-          toast.error("Brief not found");
+          toast.error("Brief not found.");
           navigate("/briefs");
           return;
         }
@@ -184,6 +294,7 @@ export default function BriefResponses() {
       const normalizedBrief = {
         ...briefData,
         questions: normalizeQuestions(briefData.questions),
+        answers: normalizeAnswers(briefData.answers),
       };
 
       const normalizedResponses = responsesData.map((response) => ({
@@ -196,7 +307,7 @@ export default function BriefResponses() {
       setSelectedResponse(normalizedResponses[0] || null);
     } catch (err) {
       console.error("Failed to load responses:", err);
-      toast.error("Failed to load responses");
+      toast.error("Failed to load responses.");
     } finally {
       setLoading(false);
     }
@@ -207,11 +318,18 @@ export default function BriefResponses() {
   }, [fetchData]);
 
   const handleShareWhatsApp = (response) => {
+    const meta = getMeta(brief);
+    const approved = meta.approvalStatus === "approved";
+
     const text = `Hi ${response.client_name || "there"},
 
 Thank you for filling out the project brief for ${brief?.title || "your project"}.
 
-I have reviewed your details and will get back to you shortly.
+I have reviewed your details. ${
+      approved
+        ? "The scope is approved, so the next step is advance/payment confirmation and project start."
+        : "Next, I will confirm the scope, included work, revision limit, and payment steps with you."
+    }
 
 - GigVorx`;
 
@@ -238,6 +356,7 @@ I have reviewed your details and will get back to you shortly.
 
   const handleDownloadPDF = (response) => {
     const doc = new jsPDF();
+    const meta = getMeta(brief);
 
     doc.setFontSize(20);
     doc.text(brief?.title || "Project Brief Response", 20, 20);
@@ -250,6 +369,34 @@ I have reviewed your details and will get back to you shortly.
 
     let y = 70;
 
+    const addLine = (text) => {
+      const lines = doc.splitTextToSize(text, 170);
+      if (y + lines.length * 5 > 280) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(lines, 20, y);
+      y += lines.length * 5 + 3;
+    };
+
+    doc.setFontSize(14);
+    doc.text("Scope Summary:", 20, y);
+    y += 8;
+
+    doc.setFontSize(11);
+    ensureArray(meta.includedWork).forEach((item) => addLine(`Included: ${item}`));
+    ensureArray(meta.excludedWork).forEach((item) => addLine(`Excluded: ${item}`));
+    addLine(`Revision limit: ${meta.revisionLimit ?? 0}`);
+    addLine(
+      `Advance: ${
+        meta.advanceRequired
+          ? `${meta.advanceValue || ""}${meta.advanceType === "percent" ? "%" : ""} required`
+          : "Not required"
+      }`
+    );
+    addLine(`Approval: ${meta.approvalStatus === "approved" ? "Approved" : "Not approved"}`);
+
+    y += 5;
     doc.setFontSize(14);
     doc.text("Responses:", 20, y);
     y += 8;
@@ -261,35 +408,16 @@ I have reviewed your details and will get back to you shortly.
 
     questions.forEach((question, index) => {
       const answer = answerToPdfText(answers[question.id]);
-      const qText = `${index + 1}. ${question.text || "Untitled question"}`;
-      const qLines = doc.splitTextToSize(qText, 170);
-
-      if (y + qLines.length * 5 > 280) {
-        doc.addPage();
-        y = 20;
-      }
-
-      doc.text(qLines, 20, y);
-      y += qLines.length * 5 + 2;
-
-      doc.setTextColor(80, 80, 80);
-      const aLines = doc.splitTextToSize(`Answer: ${answer}`, 165);
-
-      if (y + aLines.length * 5 > 280) {
-        doc.addPage();
-        y = 20;
-      }
-
-      doc.text(aLines, 25, y);
-      doc.setTextColor(0, 0, 0);
-      y += aLines.length * 5 + 5;
+      addLine(`${index + 1}. ${question.text || "Untitled question"}`);
+      addLine(`Answer: ${answer}`);
+      y += 2;
     });
 
     doc.save(
       `${brief?.title || "brief"}_response_${response.client_name || "client"}.pdf`
     );
 
-    toast.success("PDF downloaded");
+    toast.success("PDF downloaded.");
   };
 
   const copyIntakeLink = async () => {
@@ -301,7 +429,7 @@ I have reviewed your details and will get back to you shortly.
       );
       toast.success("Link copied!");
     } catch {
-      toast.error("Could not copy link");
+      toast.error("Could not copy link.");
     }
   };
 
@@ -313,12 +441,15 @@ I have reviewed your details and will get back to you shortly.
     );
   }
 
+  const meta = getMeta(brief);
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20 text-white">
       <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => navigate(`/briefs/${id}`)}
@@ -339,6 +470,7 @@ I have reviewed your details and will get back to you shortly.
           </div>
 
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => navigate(`/briefs/${id}`)}
@@ -362,21 +494,20 @@ I have reviewed your details and will get back to you shortly.
             </h2>
 
             <p className="mb-6 text-white/50">
-              Share the intake form link with your client and responses will
-              appear here.
+              Share the intake form link with your client and responses will appear
+              here.
             </p>
 
-            {brief?.share_token && (
+            {brief?.share_token ? (
               <div className="mx-auto max-w-md space-y-3 rounded-xl border border-white/10 bg-[#111] p-4 text-left">
-                <p className="text-sm font-medium text-white/60">
-                  Intake form link:
-                </p>
+                <p className="text-sm font-medium text-white/60">Intake form link:</p>
 
                 <code className="break-all text-xs text-[#FF6B00]">
                   {window.location.origin}/#/intake/{brief.share_token}
                 </code>
 
                 <Button
+                  type="button"
                   className="w-full bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
                   onClick={copyIntakeLink}
                 >
@@ -384,7 +515,7 @@ I have reviewed your details and will get back to you shortly.
                   Copy Link
                 </Button>
               </div>
-            )}
+            ) : null}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -394,10 +525,11 @@ I have reviewed your details and will get back to you shortly.
               </h2>
 
               {responses.map((response) => (
-                <div
+                <button
                   key={response.id}
+                  type="button"
                   onClick={() => setSelectedResponse(response)}
-                  className={`cursor-pointer rounded-xl border p-4 transition-all ${
+                  className={`w-full cursor-pointer rounded-xl border p-4 text-left transition-all ${
                     selectedResponse?.id === response.id
                       ? "border-[#FF6B00] bg-[#FF6B00]/10"
                       : "border-white/10 bg-[#111] hover:border-white/20"
@@ -423,12 +555,14 @@ I have reviewed your details and will get back to you shortly.
                   <p className="mt-2 text-xs text-white/30">
                     {formatDate(response.created_at || response.createdAt)}
                   </p>
-                </div>
+                </button>
               ))}
             </div>
 
-            {selectedResponse && (
+            {selectedResponse ? (
               <div className="space-y-4 lg:col-span-2">
+                <ScopeReviewCard meta={meta} />
+
                 <Card className="border-white/10 bg-[#111]">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -439,6 +573,7 @@ I have reviewed your details and will get back to you shortly.
 
                       <div className="flex gap-2">
                         <Button
+                          type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => handleDownloadPDF(selectedResponse)}
@@ -449,6 +584,7 @@ I have reviewed your details and will get back to you shortly.
                         </Button>
 
                         <Button
+                          type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => handleShareWhatsApp(selectedResponse)}
@@ -530,10 +666,7 @@ I have reviewed your details and will get back to you shortly.
                               </p>
 
                               <div className="rounded-lg border border-white/5 bg-[#1a1a1a] p-3">
-                                <AnswerDisplay
-                                  question={question}
-                                  answer={answer}
-                                />
+                                <AnswerDisplay question={question} answer={answer} />
                               </div>
                             </div>
                           </div>
@@ -543,7 +676,7 @@ I have reviewed your details and will get back to you shortly.
                   })}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </div>
