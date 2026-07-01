@@ -1,39 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertTriangle,
+  Building2,
+  CheckCircle2,
+  CreditCard,
+  Crown,
+  Globe,
+  Loader2,
+  LogOut,
+  Save,
+  User,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/AuthContext";
 import { useCurrency } from "@/lib/CurrencyContext";
 import { readSetting, writeSetting } from "@/lib/storage";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Save,
-  LogOut,
-  Crown,
-  Loader2,
-  User,
-  Building2,
-  CreditCard,
-  Globe,
-  CheckCircle2,
-  AlertTriangle,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 
 const TRIAL_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function getTrialDaysLeft(user) {
   const trialEnd = user?.trialEndsAt || user?.trial_ends_at;
+
   if (!trialEnd) return null;
 
   const endDate = new Date(trialEnd);
   if (Number.isNaN(endDate.getTime())) return null;
 
   const diff = endDate.getTime() - Date.now();
+
   if (diff <= 0) return 0;
 
   return Math.ceil(diff / DAY_MS);
@@ -94,7 +97,7 @@ export default function Settings() {
 
   const saveProfile = async () => {
     if (!profile.name.trim()) {
-      toast.error("Name cannot be empty");
+      toast.error("Name cannot be empty.");
       return;
     }
 
@@ -108,10 +111,10 @@ export default function Settings() {
       });
 
       setSavedProfile(true);
-      toast.success("Profile saved successfully");
+      toast.success("Profile saved successfully.");
       setTimeout(() => setSavedProfile(false), 3000);
-    } catch (err) {
-      toast.error("Failed to save profile: " + (err.message || "Unknown error"));
+    } catch (error) {
+      toast.error(`Failed to save profile: ${error.message || "Unknown error"}`);
     } finally {
       setSavingProfile(false);
     }
@@ -125,10 +128,10 @@ export default function Settings() {
     try {
       writeSetting(user.id, "business", business);
       setSavedBusiness(true);
-      toast.success("Business info saved");
+      toast.success("Business info saved.");
       setTimeout(() => setSavedBusiness(false), 3000);
-    } catch (err) {
-      toast.error("Failed to save business info");
+    } catch {
+      toast.error("Failed to save business info.");
     } finally {
       setSavingBusiness(false);
     }
@@ -156,12 +159,10 @@ export default function Settings() {
         </p>
       </div>
 
-      {isTrial && (
+      {isTrial ? (
         <Card
           className={`p-5 ${
-            isTrialExpired
-              ? "border-red-200 bg-red-50"
-              : "border-amber-200 bg-amber-50"
+            isTrialExpired ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"
           }`}
         >
           <div className="flex items-start justify-between gap-4">
@@ -177,6 +178,7 @@ export default function Settings() {
                   }`}
                 />
               </div>
+
               <div>
                 <h3
                   className={`font-semibold ${
@@ -187,6 +189,7 @@ export default function Settings() {
                     ? "Your trial has expired"
                     : `You are on a ${TRIAL_DAYS}-day free trial`}
                 </h3>
+
                 <p
                   className={`mt-1 text-sm ${
                     isTrialExpired ? "text-red-600" : "text-amber-700"
@@ -196,12 +199,13 @@ export default function Settings() {
                     ? "Upgrade your plan to keep using GigVorx without interruptions."
                     : trialDaysLeft === 1
                     ? "1 day left in your trial."
-                    : `${trialDaysLeft} days left in your trial.`}
+                    : `${trialDaysLeft ?? TRIAL_DAYS} days left in your trial.`}
                 </p>
               </div>
             </div>
 
             <Button
+              type="button"
               onClick={() => navigate("/pricing-app")}
               className="shrink-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
             >
@@ -210,13 +214,14 @@ export default function Settings() {
             </Button>
           </div>
         </Card>
-      )}
+      ) : null}
 
       <Card className="p-6">
         <div className="mb-1 flex items-center gap-2">
           <User className="h-4 w-4 text-muted-foreground" />
           <h3 className="font-bold">Profile</h3>
         </div>
+
         <p className="mb-4 text-xs text-muted-foreground">
           Your name and email shown across the app and on invoices.
         </p>
@@ -227,8 +232,8 @@ export default function Settings() {
             <Input
               data-testid="settings-name"
               value={profile.name}
-              onChange={(e) =>
-                setProfile({ ...profile, name: e.target.value })
+              onChange={(event) =>
+                setProfile({ ...profile, name: event.target.value })
               }
               className="mt-1"
               placeholder="Your name"
@@ -241,8 +246,8 @@ export default function Settings() {
               data-testid="settings-email"
               type="email"
               value={profile.email}
-              onChange={(e) =>
-                setProfile({ ...profile, email: e.target.value })
+              onChange={(event) =>
+                setProfile({ ...profile, email: event.target.value })
               }
               className="mt-1"
               placeholder="you@example.com"
@@ -253,8 +258,8 @@ export default function Settings() {
             <Label>Phone</Label>
             <Input
               value={profile.phone}
-              onChange={(e) =>
-                setProfile({ ...profile, phone: e.target.value })
+              onChange={(event) =>
+                setProfile({ ...profile, phone: event.target.value })
               }
               className="mt-1"
               placeholder="+91 98765 43210"
@@ -263,6 +268,7 @@ export default function Settings() {
         </div>
 
         <Button
+          type="button"
           onClick={saveProfile}
           disabled={savingProfile}
           data-testid="settings-save-profile"
@@ -292,6 +298,7 @@ export default function Settings() {
           <Building2 className="h-4 w-4 text-muted-foreground" />
           <h3 className="font-bold">Business Info</h3>
         </div>
+
         <p className="mb-4 text-xs text-muted-foreground">
           This appears on your invoices and client-facing documents.
         </p>
@@ -302,8 +309,8 @@ export default function Settings() {
             <Input
               data-testid="settings-biz-name"
               value={business.name}
-              onChange={(e) =>
-                setBusiness({ ...business, name: e.target.value })
+              onChange={(event) =>
+                setBusiness({ ...business, name: event.target.value })
               }
               className="mt-1"
               placeholder="Your business or freelance name"
@@ -316,8 +323,8 @@ export default function Settings() {
               data-testid="settings-biz-email"
               type="email"
               value={business.email}
-              onChange={(e) =>
-                setBusiness({ ...business, email: e.target.value })
+              onChange={(event) =>
+                setBusiness({ ...business, email: event.target.value })
               }
               className="mt-1"
               placeholder="business@example.com"
@@ -329,8 +336,8 @@ export default function Settings() {
             <Input
               data-testid="settings-biz-phone"
               value={business.phone}
-              onChange={(e) =>
-                setBusiness({ ...business, phone: e.target.value })
+              onChange={(event) =>
+                setBusiness({ ...business, phone: event.target.value })
               }
               className="mt-1"
               placeholder="+91 98765 43210"
@@ -341,8 +348,8 @@ export default function Settings() {
             <Label>GST / VAT Number (optional)</Label>
             <Input
               value={business.gst}
-              onChange={(e) =>
-                setBusiness({ ...business, gst: e.target.value })
+              onChange={(event) =>
+                setBusiness({ ...business, gst: event.target.value })
               }
               className="mt-1"
               placeholder="e.g. 22AAAAA0000A1Z5"
@@ -355,8 +362,8 @@ export default function Settings() {
               data-testid="settings-biz-address"
               rows={2}
               value={business.address}
-              onChange={(e) =>
-                setBusiness({ ...business, address: e.target.value })
+              onChange={(event) =>
+                setBusiness({ ...business, address: event.target.value })
               }
               className="mt-1"
               placeholder="Your city, state, country"
@@ -365,6 +372,7 @@ export default function Settings() {
         </div>
 
         <Button
+          type="button"
           onClick={saveBusiness}
           disabled={savingBusiness}
           data-testid="settings-save-biz"
@@ -394,23 +402,23 @@ export default function Settings() {
           <Globe className="h-4 w-4 text-muted-foreground" />
           <h3 className="font-bold">Currency</h3>
         </div>
+
         <p className="mb-4 text-xs text-muted-foreground">
-          This symbol is used across invoices, dashboard totals, and money
-          displays. Changing it saves automatically.
+          This symbol is used across invoices, dashboard totals, and money displays.
+          Changing it saves automatically.
         </p>
 
         <div className="flex flex-wrap gap-3">
           {[
             { code: "INR", label: "₹ Indian Rupee", icon: "₹" },
             { code: "USD", label: "$ US Dollar", icon: "$" },
-            { code: "GBP", label: "£ British Pound", icon: "£" },
-            { code: "EUR", label: "€ Euro", icon: "€" },
           ].map((item) => (
             <button
               key={item.code}
+              type="button"
               onClick={() => {
                 setCurrency(item.code);
-                toast.success(`Currency changed to ${item.label}`);
+                toast.success(`Currency changed to ${item.label}.`);
               }}
               className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
                 currency === item.code
@@ -420,15 +428,18 @@ export default function Settings() {
             >
               <span className="text-lg">{item.icon}</span>
               <span>{item.label}</span>
-              {currency === item.code && (
+              {currency === item.code ? (
                 <CheckCircle2 className="h-4 w-4 text-blue-500" />
-              )}
+              ) : null}
             </button>
           ))}
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          Currently selected: <strong>{symbol} ({currency})</strong>
+          Currently selected:{" "}
+          <strong>
+            {symbol} ({currency})
+          </strong>
         </p>
       </Card>
 
@@ -439,6 +450,7 @@ export default function Settings() {
               <CreditCard className="h-4 w-4 text-muted-foreground" />
               <h3 className="font-bold">Current Plan</h3>
             </div>
+
             <p className="mb-3 text-xs text-muted-foreground">
               Review your current access and upgrade when you are ready.
             </p>
@@ -452,28 +464,24 @@ export default function Settings() {
                 {formatPlanName(user?.plan)}
               </Badge>
 
-              {isTrial && (
+              {isTrial ? (
                 <Badge variant="outline" className="text-xs">
                   {trialDaysLeft === 0
                     ? "Trial expired"
                     : trialDaysLeft === 1
                     ? "1 day left"
-                    : `${trialDaysLeft} days left`}
+                    : `${trialDaysLeft ?? TRIAL_DAYS} days left`}
                 </Badge>
-              )}
-
-              {user?.planStatus === "early_access" && (
-                <Badge
-                  variant="outline"
-                  className="border-amber-200 text-xs text-amber-600"
-                >
-                  Early Access
+              ) : (
+                <Badge variant="outline" className="text-xs">
+                  Active paid plan
                 </Badge>
               )}
             </div>
           </div>
 
           <Button
+            type="button"
             onClick={() => navigate("/pricing-app")}
             data-testid="settings-upgrade"
             className="shrink-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
@@ -489,10 +497,13 @@ export default function Settings() {
           <LogOut className="h-4 w-4 text-muted-foreground" />
           <h3 className="font-bold">Sign Out</h3>
         </div>
+
         <p className="mb-4 text-xs text-muted-foreground">
           End your current session on this device.
         </p>
+
         <Button
+          type="button"
           variant="outline"
           onClick={handleLogout}
           data-testid="settings-logout"
