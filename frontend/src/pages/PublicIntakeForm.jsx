@@ -1,28 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import {
-  Upload,
+  AlertCircle,
+  CheckCircle2,
+  FileCheck,
+  FileText,
   Image,
   Link,
-  Video,
-  CheckCircle2,
+  List,
   Loader2,
   Send,
-  FileText,
   Type,
-  List,
-  AlertCircle,
+  Upload,
+  Video,
   X,
-  FileCheck,
 } from "lucide-react";
+
+import ClientEducationSection from "@/components/ClientEducationSection";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/lib/supabase";
 
 const questionTypeIcons = {
   text: Type,
@@ -65,12 +67,102 @@ function normalizeUrl(value) {
   return `https://${value}`;
 }
 
+function getMeta(brief) {
+  return brief?.answers?.__v1 || {};
+}
+
+function ensureArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function ScopeSummary({ meta }) {
+  const includedWork = ensureArray(meta.includedWork);
+  const excludedWork = ensureArray(meta.excludedWork);
+  const revisionLimit = meta.revisionLimit ?? 0;
+  const advanceRequired = meta.advanceRequired;
+  const advanceType = meta.advanceType || "percent";
+  const advanceValue = meta.advanceValue || "";
+
+  if (
+    includedWork.length === 0 &&
+    excludedWork.length === 0 &&
+    !revisionLimit &&
+    !advanceRequired
+  ) {
+    return null;
+  }
+
+  return (
+    <Card className="border-white/10 bg-[#111]">
+      <CardContent className="space-y-5 pt-6">
+        <div>
+          <h3 className="text-lg font-bold text-white">Project scope summary</h3>
+          <p className="mt-1 text-sm text-white/50">
+            Please review this before submitting your details. It helps avoid confusion
+            later.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {includedWork.length > 0 ? (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <h4 className="mb-2 text-sm font-semibold text-emerald-300">
+                Included work
+              </h4>
+              <ul className="space-y-1.5 text-sm text-emerald-50/80">
+                {includedWork.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {excludedWork.length > 0 ? (
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4">
+              <h4 className="mb-2 text-sm font-semibold text-rose-300">
+                Not included
+              </h4>
+              <ul className="space-y-1.5 text-sm text-rose-50/80">
+                {excludedWork.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <p className="text-xs uppercase tracking-wide text-white/40">
+              Revision limit
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white">
+              {revisionLimit || 0} revision round(s) included
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <p className="text-xs uppercase tracking-wide text-white/40">
+              Advance payment
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white">
+              {advanceRequired
+                ? `${advanceValue}${advanceType === "percent" ? "%" : ""} advance required before work starts`
+                : "No advance required"}
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PublicIntakeForm() {
   const { shareToken } = useParams();
 
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -86,11 +178,13 @@ export default function PublicIntakeForm() {
 
   const fileInputRefs = useRef({});
 
+  const meta = getMeta(brief);
+
   useEffect(() => {
     async function fetchBrief() {
       try {
         setLoading(true);
-        setError(null);
+        setError("");
 
         const { data, error: fetchError } = await supabase
           .from("briefs")
@@ -107,6 +201,7 @@ export default function PublicIntakeForm() {
         const normalizedBrief = {
           ...data,
           questions: normalizeQuestions(data.questions),
+          answers: data.answers || {},
         };
 
         setBrief(normalizedBrief);
@@ -141,10 +236,10 @@ export default function PublicIntakeForm() {
           files[question.id]?.length > 0 ||
           filePreviews[question.id]?.length > 0
         ) {
-          filled++;
+          filled += 1;
         }
-      } else if (answers[question.id]?.trim?.()) {
-        filled++;
+      } else if (String(answers[question.id] || "").trim()) {
+        filled += 1;
       }
     });
 
@@ -360,13 +455,11 @@ export default function PublicIntakeForm() {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
-        <Card className="w-full max-w-md border-white/10 bg-[#111]">
-          <CardContent className="pt-6 text-center">
-            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
-            <h2 className="mb-2 text-xl font-bold text-white">
-              Link Not Available
-            </h2>
-            <p className="text-white/60">{error}</p>
+        <Card className="max-w-md border-white/10 bg-[#111] text-center">
+          <CardContent className="pt-6">
+            <AlertCircle className="mx-auto mb-4 h-10 w-10 text-red-400" />
+            <h1 className="text-xl font-bold text-white">Link unavailable</h1>
+            <p className="mt-2 text-sm text-white/50">{error}</p>
           </CardContent>
         </Card>
       </div>
@@ -376,16 +469,13 @@ export default function PublicIntakeForm() {
   if (submitted) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
-        <Card className="w-full max-w-md border-white/10 bg-[#111]">
-          <CardContent className="pt-6 text-center">
-            <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-green-400" />
-            <h2 className="mb-2 text-xl font-bold text-white">Thank You!</h2>
-            <p className="mb-4 text-white/60">
-              Your response has been submitted successfully. We will get back to
-              you soon.
-            </p>
-            <p className="text-sm text-white/40">
-              Submitted by: {clientName} ({clientEmail})
+        <Card className="max-w-md border-white/10 bg-[#111] text-center">
+          <CardContent className="pt-6">
+            <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-400" />
+            <h1 className="text-2xl font-bold text-white">Brief submitted</h1>
+            <p className="mt-2 text-sm text-white/50">
+              Thank you. Your details have been sent to the freelancer. They can now
+              review your answers, confirm scope, and share next steps.
             </p>
           </CardContent>
         </Card>
@@ -394,20 +484,17 @@ export default function PublicIntakeForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] pb-20 text-white">
+    <div className="min-h-screen bg-[#0a0a0a] pb-10">
       <div className="border-b border-white/10 bg-[#111]">
-        <div className="mx-auto max-w-2xl px-4 py-6">
-          <Badge className="mb-3 border-[#FF6B00]/30 bg-[#FF6B00]/20 text-[#FF6B00]">
-            Client Intake Form
-          </Badge>
-
-          <h1 className="mb-2 text-2xl font-bold text-white">
-            {brief?.title || brief?.projectTitle || "Project Brief"}
+        <div className="mx-auto max-w-3xl px-4 py-6">
+          <Badge className="mb-3 bg-[#FF6B00] text-white">Client Intake</Badge>
+          <h1 className="text-2xl font-bold text-white">
+            {brief?.title || "Project Brief"}
           </h1>
-
-          {brief?.description && (
-            <p className="text-sm text-white/60">{brief.description}</p>
-          )}
+          <p className="mt-2 text-sm text-white/50">
+            Please read the guidance, prepare your files, and answer clearly. This
+            helps the freelancer understand your project and avoid scope confusion.
+          </p>
 
           <div className="mt-4">
             <div className="mb-1 flex justify-between text-xs text-white/40">
@@ -419,7 +506,11 @@ export default function PublicIntakeForm() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+        <ClientEducationSection education={meta.clientEducation} />
+
+        <ScopeSummary meta={meta} />
+
         <Card className="border-white/10 bg-[#111]">
           <CardContent className="space-y-4 pt-6">
             <h3 className="flex items-center gap-2 font-semibold text-white">
@@ -505,34 +596,30 @@ export default function PublicIntakeForm() {
                   </div>
 
                   <div className="pl-5">
-                    {question.type === "text" && (
+                    {question.type === "text" ? (
                       <Input
                         value={answer}
-                        onChange={(e) =>
-                          handleAnswerChange(question.id, e.target.value)
-                        }
+                        onChange={(e) => handleAnswerChange(question.id, e.target.value)}
                         placeholder="Type your answer..."
                         className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                       />
-                    )}
+                    ) : null}
 
-                    {question.type === "long" && (
+                    {question.type === "long" ? (
                       <Textarea
                         value={answer}
-                        onChange={(e) =>
-                          handleAnswerChange(question.id, e.target.value)
-                        }
+                        onChange={(e) => handleAnswerChange(question.id, e.target.value)}
                         placeholder="Type your detailed answer..."
                         rows={4}
                         className="resize-none border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                       />
-                    )}
+                    ) : null}
 
-                    {question.type === "select" && (
+                    {question.type === "select" ? (
                       <div className="space-y-2">
-                        {(question.options || []).map((option, optionIndex) => (
+                        {(question.options || []).map((option) => (
                           <label
-                            key={optionIndex}
+                            key={option}
                             className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all ${
                               answer === option
                                 ? "border-[#FF6B00] bg-[#FF6B00]/10"
@@ -553,9 +640,25 @@ export default function PublicIntakeForm() {
                           </label>
                         ))}
                       </div>
-                    )}
+                    ) : null}
 
-                    {(question.type === "file" || question.type === "image") && (
+                    {(question.type === "link" || question.type === "video") ? (
+                      <Input
+                        type="url"
+                        value={answer}
+                        onChange={(e) =>
+                          handleAnswerChange(question.id, normalizeUrl(e.target.value))
+                        }
+                        placeholder={
+                          question.type === "video"
+                            ? "https://youtube.com/..."
+                            : "https://example.com"
+                        }
+                        className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                      />
+                    ) : null}
+
+                    {(question.type === "file" || question.type === "image") ? (
                       <div className="space-y-3">
                         <button
                           type="button"
@@ -596,7 +699,7 @@ export default function PublicIntakeForm() {
                           className="hidden"
                         />
 
-                        {previews.length > 0 && question.type === "file" && (
+                        {previews.length > 0 ? (
                           <div className="space-y-2">
                             {previews.map((file, fileIndex) => (
                               <div
@@ -619,96 +722,9 @@ export default function PublicIntakeForm() {
                               </div>
                             ))}
                           </div>
-                        )}
-
-                        {previews.length > 0 && question.type === "image" && (
-                          <div className="grid grid-cols-3 gap-2">
-                            {previews.map((file, fileIndex) => (
-                              <div
-                                key={`${file.name}-${fileIndex}`}
-                                className="group relative aspect-square overflow-hidden rounded-lg border border-white/10"
-                              >
-                                <img
-                                  src={file.url}
-                                  alt={file.name}
-                                  className="h-full w-full object-cover"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleRemoveFile(question.id, fileIndex)
-                                  }
-                                  className="absolute right-1 top-1 rounded-full bg-red-500/80 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
-                                  <span className="block truncate text-[10px] text-white">
-                                    {file.name}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        ) : null}
                       </div>
-                    )}
-
-                    {question.type === "link" && (
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Link className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/20" />
-                          <Input
-                            value={answer}
-                            onChange={(e) =>
-                              handleAnswerChange(question.id, e.target.value)
-                            }
-                            placeholder="https://example.com"
-                            className="border-white/10 bg-[#1a1a1a] pl-10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
-                          />
-                        </div>
-
-                        {answer && (
-                          <a
-                            href={normalizeUrl(answer)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 rounded-md bg-[#FF6B00]/20 px-3 py-2 text-sm text-[#FF6B00] transition-colors hover:bg-[#FF6B00]/30"
-                          >
-                            <Link className="h-3.5 w-3.5" />
-                            Open
-                          </a>
-                        )}
-                      </div>
-                    )}
-
-                    {question.type === "video" && (
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Video className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/20" />
-                          <Input
-                            value={answer}
-                            onChange={(e) =>
-                              handleAnswerChange(question.id, e.target.value)
-                            }
-                            placeholder="https://youtube.com/... or https://vimeo.com/..."
-                            className="border-white/10 bg-[#1a1a1a] pl-10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
-                          />
-                        </div>
-
-                        {answer && (
-                          <a
-                            href={normalizeUrl(answer)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 rounded-md bg-[#FF6B00]/20 px-3 py-2 text-sm text-[#FF6B00] transition-colors hover:bg-[#FF6B00]/30"
-                          >
-                            <Video className="h-3.5 w-3.5" />
-                            Watch
-                          </a>
-                        )}
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
@@ -716,29 +732,24 @@ export default function PublicIntakeForm() {
           })}
         </div>
 
-        <div className="pt-4">
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="h-12 w-full bg-[#FF6B00] text-lg font-semibold text-white hover:bg-[#FF6B00]/90"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              <>
-                <Send className="mr-2 h-5 w-5" />
-                Submit Response
-              </>
-            )}
-          </Button>
-
-          <p className="mt-3 text-center text-xs text-white/30">
-            Powered by GigVorx — your information is secure and confidential.
-          </p>
-        </div>
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="h-12 w-full bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            <>
+              <Send className="mr-2 h-5 w-5" />
+              Submit Brief Details
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );
