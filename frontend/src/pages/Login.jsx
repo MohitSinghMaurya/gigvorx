@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
@@ -7,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandLockup, BrandLogoLarge } from "@/components/Brand";
 import { toast } from "sonner";
-import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 
 export default function Login() {
   const { login } = useAuth();
@@ -44,9 +43,8 @@ export default function Login() {
           </Link>
 
           <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-
           <p className="text-muted-foreground mt-1.5 text-sm">
-            Sign in to your workspace to continue.
+            Sign in to continue your client workflow and check your trial status.
           </p>
 
           <form onSubmit={submit} className="mt-8 space-y-4">
@@ -126,6 +124,17 @@ export default function Login() {
             </Button>
           </form>
 
+          <div className="mt-6 rounded-lg border bg-muted/40 p-4 text-xs text-muted-foreground space-y-2">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+              <p>If your trial has not started yet, it will start when you sign in.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+              <p>Your remaining trial days are shown inside the app.</p>
+            </div>
+          </div>
+
           <div className="mt-6 p-4 rounded-lg bg-muted/50 border text-xs space-y-1">
             <p className="font-semibold text-foreground">Try the demo</p>
 
@@ -173,12 +182,11 @@ export default function Login() {
           <BrandLogoLarge size={88} className="mb-8" />
 
           <p className="text-sm font-semibold uppercase tracking-widest text-sky-300">
-            For freelancers who care
+            Built for freelancers and agencies
           </p>
 
           <blockquote className="mt-4 text-3xl font-bold leading-tight tracking-tight">
-            "GigVorx made me look like a $5,000 agency on day one. My closes
-            went from 30% to 70%."
+            “Instead of chasing client details in chats, I now collect everything in one structured workflow.”
           </blockquote>
 
           <div className="mt-6 flex items-center gap-3">
@@ -196,4 +204,3 @@ export default function Login() {
     </div>
   );
 }
-
