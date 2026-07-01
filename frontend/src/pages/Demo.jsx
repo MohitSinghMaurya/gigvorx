@@ -10,7 +10,6 @@ import {
   Clock,
   Crown,
   FileText,
-  Image,
   Link2,
   MessageCircle,
   Play,
@@ -18,9 +17,7 @@ import {
   RefreshCw,
   Sparkles,
   Target,
-  Upload,
   Users,
-  Video,
   X,
 } from "lucide-react";
 
@@ -220,18 +217,6 @@ function StatusBadge({ status }) {
   );
 }
 
-function ImagePlaceholder({ label, height = "h-48" }) {
-  return (
-    <div
-      className={`${height} flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-muted/30 text-muted-foreground`}
-    >
-      <Image className="h-8 w-8 opacity-30" />
-      <p className="text-xs font-medium opacity-50">{label}</p>
-      <p className="text-[10px] opacity-40">Screenshot placeholder</p>
-    </div>
-  );
-}
-
 function GuideModal({ onClose }) {
   const [step, setStep] = useState(0);
 
@@ -271,7 +256,9 @@ function GuideModal({ onClose }) {
 
         <div className="px-6 py-6">
           <div className="mb-4 flex items-center gap-3">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${current.color}`}>
+            <div
+              className={`flex h-12 w-12 items-center justify-center rounded-xl ${current.color}`}
+            >
               <Icon className="h-6 w-6 text-white" />
             </div>
 
@@ -283,7 +270,9 @@ function GuideModal({ onClose }) {
             </div>
           </div>
 
-          <p className="mb-4 leading-relaxed text-muted-foreground">{current.desc}</p>
+          <p className="mb-4 leading-relaxed text-muted-foreground">
+            {current.desc}
+          </p>
 
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
             <p className="flex items-start gap-2 text-xs font-medium text-blue-700">
@@ -351,11 +340,14 @@ export default function Demo() {
   const [showGuide, setShowGuide] = useState(false);
   const [activeTab, setActiveTab] = useState("leads");
 
-  const totalRevenue = DEMO_INVOICES.reduce((sum, invoice) => sum + invoice.amount, 0);
-  const collected = DEMO_INVOICES.filter((invoice) => invoice.status === "paid").reduce(
+  const totalRevenue = DEMO_INVOICES.reduce(
     (sum, invoice) => sum + invoice.amount,
     0
   );
+
+  const collected = DEMO_INVOICES.filter(
+    (invoice) => invoice.status === "paid"
+  ).reduce((sum, invoice) => sum + invoice.amount, 0);
 
   const tabs = [
     { id: "leads", label: "Leads", icon: Target },
@@ -375,12 +367,22 @@ export default function Demo() {
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => setShowGuide(true)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setShowGuide(true)}
+          >
             <Play className="mr-1.5 h-3.5 w-3.5" />
             Watch Guide
           </Button>
 
-          <Button type="button" size="sm" variant="outline" onClick={() => navigate("/")}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => navigate("/")}
+          >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
             Exit Demo
           </Button>
@@ -391,7 +393,7 @@ export default function Demo() {
             onClick={() => navigate("/signup")}
             className="bg-amber-500 text-white hover:bg-amber-600"
           >
-            Start Free Trial
+            Start 7-Day Trial
             <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
           </Button>
         </div>
@@ -415,69 +417,6 @@ export default function Demo() {
         </Button>
       </div>
 
-      <div className="mb-10">
-        <h2 className="mb-3 flex items-center gap-2 text-xl font-semibold">
-          <Video className="h-5 w-5 text-blue-500" />
-          Product Walkthrough Video
-        </h2>
-
-        <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl border bg-muted/30">
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-muted-foreground">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
-              <Play className="ml-1 h-8 w-8 text-blue-500" />
-            </div>
-
-            <div className="text-center">
-              <p className="font-semibold text-foreground">Demo Video Coming Soon</p>
-              <p className="mt-1 text-sm">
-                A short walkthrough video can be added here later.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-10">
-        <h2 className="mb-2 flex items-center gap-2 text-xl font-semibold">
-          <Image className="h-5 w-5 text-violet-500" />
-          App Screenshots
-        </h2>
-
-        <p className="mb-4 text-sm text-muted-foreground">
-          Preview the main areas of the GigVorx workflow.
-        </p>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Dashboard</p>
-            <ImagePlaceholder label="Dashboard screenshot" />
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Lead Pipeline</p>
-            <ImagePlaceholder label="Lead pipeline board" />
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Brief Editor</p>
-            <ImagePlaceholder label="Brief editor with questions" />
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Invoice</p>
-            <ImagePlaceholder label="Invoice preview" />
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-          <p className="flex items-start gap-2 text-xs font-medium text-blue-700">
-            <Upload className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Real screenshots can replace these placeholders when the final Version 0
-            screens are ready.
-          </p>
-        </div>
-      </div>
-
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -488,7 +427,9 @@ export default function Demo() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{DEMO_CLIENTS.length}</p>
-            <p className="mt-1 text-xs text-muted-foreground">2 projects in progress</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              2 projects in progress
+            </p>
           </CardContent>
         </Card>
 
@@ -501,7 +442,9 @@ export default function Demo() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{DEMO_BRIEFS.length}</p>
-            <p className="mt-1 text-xs text-muted-foreground">1 sent, 1 in draft</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              1 sent, 1 in draft
+            </p>
           </CardContent>
         </Card>
 
@@ -513,7 +456,9 @@ export default function Demo() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">₹{totalRevenue.toLocaleString("en-IN")}</p>
+            <p className="text-3xl font-bold">
+              ₹{totalRevenue.toLocaleString("en-IN")}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               ₹{collected.toLocaleString("en-IN")} collected
             </p>
@@ -558,12 +503,18 @@ export default function Demo() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">{lead.name}</p>
-                    <p className="text-sm text-muted-foreground">{lead.company}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {lead.company}
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm text-muted-foreground">{lead.source}</span>
-                    <span className="font-semibold text-blue-600">{lead.value}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {lead.source}
+                    </span>
+                    <span className="font-semibold text-blue-600">
+                      {lead.value}
+                    </span>
                     <StatusBadge status={lead.status} />
                   </div>
                 </div>
@@ -625,8 +576,8 @@ export default function Demo() {
       {activeTab === "briefs" ? (
         <div>
           <p className="mb-4 text-sm text-muted-foreground">
-            Client briefs collect project requirements. Share the link with clients
-            so scope is clear before work begins.
+            Client briefs collect project requirements. Share the link with
+            clients so scope is clear before work begins.
           </p>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -636,7 +587,9 @@ export default function Demo() {
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
                       <h3 className="font-semibold">{brief.title}</h3>
-                      <p className="text-sm text-muted-foreground">{brief.client}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {brief.client}
+                      </p>
                     </div>
 
                     <StatusBadge status={brief.status} />
@@ -701,8 +654,12 @@ export default function Demo() {
                       <StatusBadge status={invoice.status} />
                     </div>
 
-                    <p className="text-sm text-muted-foreground">{invoice.client}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{invoice.desc}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {invoice.client}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {invoice.desc}
+                    </p>
                   </div>
 
                   <div className="text-right">
@@ -719,7 +676,13 @@ export default function Demo() {
                 </div>
 
                 <div className="mt-3 flex gap-2 border-t pt-3">
-                  <Button type="button" size="sm" variant="outline" className="text-xs" disabled>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-xs"
+                    disabled
+                  >
                     <MessageCircle className="mr-1 h-3 w-3" />
                     Share on WhatsApp
                   </Button>
@@ -762,7 +725,7 @@ export default function Demo() {
             onClick={() => navigate("/signup")}
             className="bg-white font-semibold text-blue-700 hover:bg-white/90"
           >
-            Start 7-Day Free Trial
+            Start 7-Day Trial
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
 
