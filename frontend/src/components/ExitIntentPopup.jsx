@@ -14,13 +14,16 @@ export default function ExitIntentPopup() {
     if (alreadyShown) setHasShown(true);
   }, []);
 
-  const handleMouseLeave = useCallback((e) => {
-    if (e.clientY < 10 && !hasShown && !show) {
-      setShow(true);
-      setHasShown(true);
-      sessionStorage.setItem("exitPopupShown", "true");
-    }
-  }, [hasShown, show]);
+  const handleMouseLeave = useCallback(
+    (e) => {
+      if (e.clientY < 10 && !hasShown && !show) {
+        setShow(true);
+        setHasShown(true);
+        sessionStorage.setItem("exitPopupShown", "true");
+      }
+    },
+    [hasShown, show]
+  );
 
   useEffect(() => {
     if (window.innerWidth > 768) {
@@ -33,8 +36,10 @@ export default function ExitIntentPopup() {
     if (window.innerWidth <= 768) {
       let lastScrollY = window.scrollY;
       let scrollUpCount = 0;
+
       const handleScroll = () => {
         const currentY = window.scrollY;
+
         if (lastScrollY - currentY > 50) {
           scrollUpCount++;
           if (scrollUpCount >= 2 && !hasShown && !show) {
@@ -43,8 +48,10 @@ export default function ExitIntentPopup() {
             sessionStorage.setItem("exitPopupShown", "true");
           }
         }
+
         lastScrollY = currentY;
       };
+
       window.addEventListener("scroll", handleScroll, { passive: true });
       return () => window.removeEventListener("scroll", handleScroll);
     }
@@ -70,44 +77,57 @@ export default function ExitIntentPopup() {
             className="relative w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            <Card className="p-8 text-center relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-violet-500" />
+            <Card className="relative overflow-hidden p-8 text-center">
+              <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-blue-500 to-violet-500" />
+
               <button
                 onClick={handleClose}
-                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-muted transition-colors"
+                className="absolute right-4 top-4 rounded-full p-1.5 transition-colors hover:bg-muted"
                 aria-label="Close popup"
               >
-                <X className="w-4 h-4 text-muted-foreground" />
+                <X className="h-4 w-4 text-muted-foreground" />
               </button>
-              <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                <Gift className="w-8 h-8 text-blue-500" />
+
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+                <Gift className="h-8 w-8 text-blue-500" />
               </div>
-              <h3 className="text-2xl font-bold mb-2">Wait — your first brief is free</h3>
-              <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-                Join 2,000+ freelancers who use GigVorx to collect client requirements in minutes, not hours. No credit card needed.
+
+              <h3 className="mb-2 text-2xl font-bold">
+                Wait — start your 7-day free trial
+              </h3>
+
+              <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
+                Turn messy client chats into clear briefs, scope, invoices, and
+                follow-ups in one place. No credit card required to get started.
               </p>
-              <div className="flex flex-col gap-2 text-sm text-left mb-6 max-w-xs mx-auto">
+
+              <div className="mx-auto mb-6 flex max-w-xs flex-col gap-2 text-left text-sm">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>AI-generated niche questions</span>
+                  <Sparkles className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>Client briefs built for service businesses</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>WhatsApp + PDF sharing</span>
+                  <Sparkles className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>Invoices, approvals, and follow-ups in one workflow</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>Free forever plan available</span>
+                  <Sparkles className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>7-day free trial with full setup in minutes</span>
                 </div>
               </div>
+
               <Link to="/signup" onClick={handleClose}>
-                <Button size="lg" className="w-full bg-gradient-to-r from-blue-500 to-violet-500 text-white hover:opacity-90 shadow-lg shadow-blue-500/25">
-                  Start free trial
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                <Button
+                  size="lg"
+                  className="w-full bg-gradient-to-r from-blue-500 to-violet-500 text-white shadow-lg shadow-blue-500/25 hover:opacity-90"
+                >
+                  Start 7-day free trial
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
+
               <p className="mt-3 text-xs text-muted-foreground">
-                Setup takes 5 minutes. Cancel anytime.
+                Setup takes 5 minutes. Upgrade only if it fits your workflow.
               </p>
             </Card>
           </motion.div>
