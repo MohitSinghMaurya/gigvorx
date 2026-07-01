@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
-  Upload, Image, Link, Video, CheckCircle2, Loader2, Send,
-  FileText, Type, List, AlertCircle, X, FileCheck
+  Upload,
+  Image,
+  Link,
+  Video,
+  CheckCircle2,
+  Loader2,
+  Send,
+  FileText,
+  Type,
+  List,
+  AlertCircle,
+  X,
+  FileCheck,
 } from "lucide-react";
 
 const questionTypeIcons = {
@@ -33,8 +44,30 @@ const questionTypeLabels = {
   video: "Video Link",
 };
 
+function normalizeQuestions(value) {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function normalizeUrl(value) {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  return `https://${value}`;
+}
+
 export default function PublicIntakeForm() {
   const { shareToken } = useParams();
+
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -54,64 +87,93 @@ export default function PublicIntakeForm() {
   const fileInputRefs = useRef({});
 
   useEffect(() => {
+    async function fetchBrief() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const { data, error: fetchError } = await supabase
+          .from("briefs")
+          .select("*")
+          .eq("share_token", shareToken)
+          .eq("share_enabled", true)
+          .single();
+
+        if (fetchError || !data) {
+          setError("This intake form link is invalid or has been disabled.");
+          return;
+        }
+
+        const normalizedBrief = {
+          ...data,
+          questions: normalizeQuestions(data.questions),
+        };
+
+        setBrief(normalizedBrief);
+        setClientName(data.client_name || data.clientName || "");
+        setClientEmail(data.client_email || data.clientEmail || "");
+        setClientPhone(data.client_phone || data.clientPhone || "");
+      } catch (err) {
+        console.error("Public intake load error:", err);
+        setError("Something went wrong. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     fetchBrief();
   }, [shareToken]);
 
   useEffect(() => {
     if (!brief) return;
+
     const total = brief.questions?.length || 0;
-    if (total === 0) { setProgress(0); return; }
+    if (total === 0) {
+      setProgress(0);
+      return;
+    }
+
     let filled = 0;
-    brief.questions.forEach(q => {
-      if (q.type === "file" || q.type === "image") {
-        if (files[q.id]?.length > 0 || filePreviews[q.id]?.length > 0) filled++;
-      } else {
-        if (answers[q.id]?.trim?.()) filled++;
+
+    brief.questions.forEach((question) => {
+      if (question.type === "file" || question.type === "image") {
+        if (
+          files[question.id]?.length > 0 ||
+          filePreviews[question.id]?.length > 0
+        ) {
+          filled++;
+        }
+      } else if (answers[question.id]?.trim?.()) {
+        filled++;
       }
     });
+
     setProgress(Math.round((filled / total) * 100));
   }, [answers, files, filePreviews, brief]);
 
-  const fetchBrief = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("briefs")
-        .select("*")
-        .eq("share_token", shareToken)
-        .eq("share_enabled", true)
-        .single();
-
-      if (error || !data) {
-        setError("This intake form link is invalid or has been disabled.");
-        return;
-      }
-      setBrief(data);
-      if (data.clientEmail) setClientEmail(data.clientEmail);
-      if (data.clientName) setClientName(data.clientName);
-    } catch (err) {
-      setError("Something went wrong. Please try again later.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleAnswerChange = (questionId, value) => {
-    setAnswers(prev => ({ ...prev, [questionId]: value }));
+    setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  const handleFileSelect = async (questionId, event) => {
-    const selectedFiles = Array.from(event.target.files);
+  const handleFileSelect = (questionId, event) => {
+    const selectedFiles = Array.from(event.target.files || []);
     if (!selectedFiles.length) return;
 
-    setFiles(prev => ({ ...prev, [questionId]: [...(prev[questionId] || []), ...selectedFiles] }));
+    setFiles((prev) => ({
+      ...prev,
+      [questionId]: [...(prev[questionId] || []), ...selectedFiles],
+    }));
 
-    const previews = selectedFiles.map(file => ({
+    const previews = selectedFiles.map((file) => ({
       name: file.name,
       url: URL.createObjectURL(file),
       type: file.type,
     }));
-    setFilePreviews(prev => ({ ...prev, [questionId]: [...(prev[questionId] || []), ...previews] }));
+
+    setFilePreviews((prev) => ({
+      ...prev,
+      [questionId]: [...(prev[questionId] || []), ...previews],
+    }));
 
     if (fileInputRefs.current[questionId]) {
       fileInputRefs.current[questionId].value = "";
@@ -119,12 +181,13 @@ export default function PublicIntakeForm() {
   };
 
   const handleRemoveFile = (questionId, fileIndex) => {
-    setFiles(prev => {
+    setFiles((prev) => {
       const updated = [...(prev[questionId] || [])];
       updated.splice(fileIndex, 1);
       return { ...prev, [questionId]: updated };
     });
-    setFilePreviews(prev => {
+
+    setFilePreviews((prev) => {
       const updated = [...(prev[questionId] || [])];
       if (updated[fileIndex]?.url) URL.revokeObjectURL(updated[fileIndex].url);
       updated.splice(fileIndex, 1);
@@ -134,28 +197,45 @@ export default function PublicIntakeForm() {
 
   const uploadFilesToSupabase = async (questionId, fileList) => {
     if (!fileList?.length) return [];
-    setUploading(prev => ({ ...prev, [questionId]: true }));
+
+    setUploading((prev) => ({ ...prev, [questionId]: true }));
+
     const uploaded = [];
 
     for (const file of fileList) {
       const fileExt = file.name.split(".").pop();
-      const fileName = `${shareToken}/${questionId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const fileName = `${shareToken}/${questionId}/${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2)}.${fileExt}`;
+
       try {
-        const { error: upError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from("gigvorx-attachments")
           .upload(fileName, file, { upsert: false });
-        if (upError) throw upError;
+
+        if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage
           .from("gigvorx-attachments")
           .getPublicUrl(fileName);
-        uploaded.push({ name: file.name, url: urlData.publicUrl, type: file.type });
+
+        uploaded.push({
+          name: file.name,
+          url: urlData.publicUrl,
+          type: file.type,
+        });
       } catch (err) {
         console.error("Upload error:", err);
+        uploaded.push({
+          name: file.name,
+          url: "",
+          type: file.type,
+          uploadError: true,
+        });
       }
     }
 
-    setUploading(prev => ({ ...prev, [questionId]: false }));
+    setUploading((prev) => ({ ...prev, [questionId]: false }));
     return uploaded;
   };
 
@@ -169,16 +249,24 @@ export default function PublicIntakeForm() {
 
     try {
       const fileAnswers = {};
-      for (const q of brief.questions || []) {
-        if ((q.type === "file" || q.type === "image") && files[q.id]?.length > 0) {
-          const uploaded = await uploadFilesToSupabase(q.id, files[q.id]);
-          fileAnswers[q.id] = uploaded;
+
+      for (const question of brief.questions || []) {
+        if (
+          (question.type === "file" || question.type === "image") &&
+          files[question.id]?.length > 0
+        ) {
+          const uploaded = await uploadFilesToSupabase(
+            question.id,
+            files[question.id]
+          );
+          fileAnswers[question.id] = uploaded;
         }
       }
 
       const finalAnswers = { ...answers };
-      Object.entries(fileAnswers).forEach(([qid, uploads]) => {
-        finalAnswers[qid] = JSON.stringify(uploads);
+
+      Object.entries(fileAnswers).forEach(([questionId, uploads]) => {
+        finalAnswers[questionId] = JSON.stringify(uploads);
       });
 
       const { data: existingClient } = await supabase
@@ -191,7 +279,7 @@ export default function PublicIntakeForm() {
       let clientId = existingClient?.id;
 
       if (!clientId) {
-        const { data: newClient } = await supabase
+        const { data: newClient, error: clientError } = await supabase
           .from("clients")
           .insert({
             name: clientName.trim(),
@@ -199,33 +287,54 @@ export default function PublicIntakeForm() {
             phone: clientPhone.trim() || null,
             user_id: brief.user_id,
             source: "public_intake",
-            status: "lead",
+            status: "new_lead",
+            is_lead: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .select("id")
           .single();
+
+        if (clientError) throw clientError;
         clientId = newClient?.id;
       }
 
-      await supabase.from("brief_responses").insert({
-        brief_id: brief.id,
-        client_id: clientId,
-        client_name: clientName.trim(),
-        client_email: clientEmail.trim(),
-        client_phone: clientPhone.trim() || null,
-        answers: finalAnswers,
-        share_token: shareToken,
-      });
+      const { error: responseError } = await supabase
+        .from("brief_responses")
+        .insert({
+          brief_id: brief.id,
+          client_id: clientId,
+          client_name: clientName.trim(),
+          client_email: clientEmail.trim(),
+          client_phone: clientPhone.trim() || null,
+          answers: finalAnswers,
+          share_token: shareToken,
+          created_at: new Date().toISOString(),
+        });
+
+      if (responseError) throw responseError;
 
       await supabase
         .from("briefs")
-        .update({ status: "sent", clientName: clientName.trim(), clientEmail: clientEmail.trim() })
+        .update({
+          status: "sent",
+          client_name: clientName.trim(),
+          client_email: clientEmail.trim(),
+          client_phone: clientPhone.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", brief.id);
 
-      await supabase.from("analytics_events").insert({
-        user_id: brief.user_id,
-        event_type: "public_intake_submit",
-        metadata: { brief_id: brief.id, share_token: shareToken },
-      });
+      try {
+        await supabase.from("analytics_events").insert({
+          user_id: brief.user_id,
+          event_name: "public_intake_submit",
+          event_data: { brief_id: brief.id, share_token: shareToken },
+          created_at: new Date().toISOString(),
+        });
+      } catch {
+        // Analytics should not block intake submission.
+      }
 
       setSubmitted(true);
     } catch (err) {
@@ -237,27 +346,26 @@ export default function PublicIntakeForm() {
   };
 
   const triggerFileInput = (questionId) => {
-    const input = fileInputRefs.current[questionId];
-    if (input) {
-      input.click();
-    }
+    fileInputRefs.current[questionId]?.click();
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#FF6B00] animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#FF6B00]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">
-        <Card className="bg-[#111] border-white/10 max-w-md w-full">
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
+        <Card className="w-full max-w-md border-white/10 bg-[#111]">
           <CardContent className="pt-6 text-center">
-            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Link Not Available</h2>
+            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+            <h2 className="mb-2 text-xl font-bold text-white">
+              Link Not Available
+            </h2>
             <p className="text-white/60">{error}</p>
           </CardContent>
         </Card>
@@ -267,13 +375,18 @@ export default function PublicIntakeForm() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">
-        <Card className="bg-[#111] border-white/10 max-w-md w-full">
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
+        <Card className="w-full max-w-md border-white/10 bg-[#111]">
           <CardContent className="pt-6 text-center">
-            <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Thank You!</h2>
-            <p className="text-white/60 mb-4">Your response has been submitted successfully. We will get back to you soon.</p>
-            <p className="text-white/40 text-sm">Submitted by: {clientName} ({clientEmail})</p>
+            <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-green-400" />
+            <h2 className="mb-2 text-xl font-bold text-white">Thank You!</h2>
+            <p className="mb-4 text-white/60">
+              Your response has been submitted successfully. We will get back to
+              you soon.
+            </p>
+            <p className="text-sm text-white/40">
+              Submitted by: {clientName} ({clientEmail})
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -281,14 +394,23 @@ export default function PublicIntakeForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
+    <div className="min-h-screen bg-[#0a0a0a] pb-20 text-white">
       <div className="border-b border-white/10 bg-[#111]">
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          <Badge className="bg-[#FF6B00]/20 text-[#FF6B00] border-[#FF6B00]/30 mb-3">Client Intake Form</Badge>
-          <h1 className="text-2xl font-bold text-white mb-2">{brief?.projectTitle || "Project Brief"}</h1>
-          {brief?.description && <p className="text-white/60 text-sm">{brief.description}</p>}
+        <div className="mx-auto max-w-2xl px-4 py-6">
+          <Badge className="mb-3 border-[#FF6B00]/30 bg-[#FF6B00]/20 text-[#FF6B00]">
+            Client Intake Form
+          </Badge>
+
+          <h1 className="mb-2 text-2xl font-bold text-white">
+            {brief?.title || brief?.projectTitle || "Project Brief"}
+          </h1>
+
+          {brief?.description && (
+            <p className="text-sm text-white/60">{brief.description}</p>
+          )}
+
           <div className="mt-4">
-            <div className="flex justify-between text-xs text-white/40 mb-1">
+            <div className="mb-1 flex justify-between text-xs text-white/40">
               <span>Progress</span>
               <span>{progress}%</span>
             </div>
@@ -297,23 +419,27 @@ export default function PublicIntakeForm() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        <Card className="bg-[#111] border-white/10">
-          <CardContent className="pt-6 space-y-4">
-            <h3 className="text-white font-semibold flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[#FF6B00] text-white text-xs flex items-center justify-center font-bold">1</span>
+      <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
+        <Card className="border-white/10 bg-[#111]">
+          <CardContent className="space-y-4 pt-6">
+            <h3 className="flex items-center gap-2 font-semibold text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FF6B00] text-xs font-bold text-white">
+                1
+              </span>
               Your Contact Information
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-white/80">Full Name *</Label>
                 <Input
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   placeholder="John Doe"
-                  className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
+                  className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label className="text-white/80">Email *</Label>
                 <Input
@@ -321,9 +447,10 @@ export default function PublicIntakeForm() {
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
                   placeholder="john@example.com"
-                  className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
+                  className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                 />
               </div>
+
               <div className="space-y-2 md:col-span-2">
                 <Label className="text-white/80">Phone (optional)</Label>
                 <Input
@@ -331,7 +458,7 @@ export default function PublicIntakeForm() {
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
                   placeholder="+91 98765 43210"
-                  className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
+                  className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                 />
               </div>
             </div>
@@ -339,160 +466,186 @@ export default function PublicIntakeForm() {
         </Card>
 
         <div className="space-y-4">
-          <h3 className="text-white font-semibold flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-[#FF6B00] text-white text-xs flex items-center justify-center font-bold">2</span>
+          <h3 className="flex items-center gap-2 font-semibold text-white">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FF6B00] text-xs font-bold text-white">
+              2
+            </span>
             Project Questions
           </h3>
 
-          {(brief?.questions || []).map((q, index) => {
-            const Icon = questionTypeIcons[q.type] || Type;
-            const answer = answers[q.id] || "";
-            const qPreviews = filePreviews[q.id] || [];
-            const isUploading = uploading[q.id];
+          {(brief?.questions || []).map((question, index) => {
+            const Icon = questionTypeIcons[question.type] || Type;
+            const answer = answers[question.id] || "";
+            const previews = filePreviews[question.id] || [];
+            const isUploading = uploading[question.id];
 
             return (
-              <Card key={q.id} className="bg-[#111] border-white/10">
-                <CardContent className="pt-5 pb-5 space-y-3">
+              <Card key={question.id || index} className="border-white/10 bg-[#111]">
+                <CardContent className="space-y-3 pb-5 pt-5">
                   <div className="flex items-start gap-2">
-                    <span className="text-[#FF6B00] font-bold text-sm mt-0.5">{index + 1}.</span>
+                    <span className="mt-0.5 text-sm font-bold text-[#FF6B00]">
+                      {index + 1}.
+                    </span>
+
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline" className="border-white/10 text-white/50 text-[10px] px-1.5 py-0">
-                          <Icon className="w-3 h-3 mr-1" />
-                          {questionTypeLabels[q.type] || q.type}
+                      <div className="mb-1 flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="border-white/10 px-1.5 py-0 text-[10px] text-white/50"
+                        >
+                          <Icon className="mr-1 h-3 w-3" />
+                          {questionTypeLabels[question.type] || question.type}
                         </Badge>
                       </div>
-                      <p className="text-white font-medium">{q.text || "Untitled Question"}</p>
+
+                      <p className="font-medium text-white">
+                        {question.text || "Untitled Question"}
+                      </p>
                     </div>
                   </div>
 
                   <div className="pl-5">
-                    {q.type === "text" && (
+                    {question.type === "text" && (
                       <Input
                         value={answer}
-                        onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                        onChange={(e) =>
+                          handleAnswerChange(question.id, e.target.value)
+                        }
                         placeholder="Type your answer..."
-                        className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20"
+                        className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                       />
                     )}
 
-                    {q.type === "long" && (
+                    {question.type === "long" && (
                       <Textarea
                         value={answer}
-                        onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                        onChange={(e) =>
+                          handleAnswerChange(question.id, e.target.value)
+                        }
                         placeholder="Type your detailed answer..."
                         rows={4}
-                        className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 resize-none"
+                        className="resize-none border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                       />
                     )}
 
-                    {q.type === "select" && (
+                    {question.type === "select" && (
                       <div className="space-y-2">
-                        {(q.options || []).map((opt, oIndex) => (
+                        {(question.options || []).map((option, optionIndex) => (
                           <label
-                            key={oIndex}
-                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                              answer === opt
+                            key={optionIndex}
+                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all ${
+                              answer === option
                                 ? "border-[#FF6B00] bg-[#FF6B00]/10"
                                 : "border-white/10 bg-[#1a1a1a] hover:border-white/20"
                             }`}
                           >
                             <input
                               type="radio"
-                              name={`question-${q.id}`}
-                              value={opt}
-                              checked={answer === opt}
-                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                              className="w-4 h-4 accent-[#FF6B00]"
+                              name={`question-${question.id}`}
+                              value={option}
+                              checked={answer === option}
+                              onChange={(e) =>
+                                handleAnswerChange(question.id, e.target.value)
+                              }
+                              className="h-4 w-4 accent-[#FF6B00]"
                             />
-                            <span className="text-white text-sm">{opt}</span>
+                            <span className="text-sm text-white">{option}</span>
                           </label>
                         ))}
                       </div>
                     )}
 
-                    {q.type === "file" && (
+                    {(question.type === "file" || question.type === "image") && (
                       <div className="space-y-3">
                         <button
                           type="button"
-                          onClick={() => triggerFileInput(q.id)}
-                          className="w-full h-20 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-[#FF6B00]/50 hover:bg-[#FF6B00]/5 transition-all cursor-pointer"
+                          onClick={() => triggerFileInput(question.id)}
+                          className="flex h-20 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-white/10 transition-all hover:border-[#FF6B00]/50 hover:bg-[#FF6B00]/5"
                         >
                           {isUploading ? (
-                            <Loader2 className="w-5 h-5 text-[#FF6B00] animate-spin" />
+                            <Loader2 className="h-5 w-5 animate-spin text-[#FF6B00]" />
+                          ) : question.type === "image" ? (
+                            <>
+                              <Image className="h-5 w-5 text-white/30" />
+                              <span className="text-sm text-white/30">
+                                Click to upload images
+                              </span>
+                            </>
                           ) : (
                             <>
-                              <Upload className="w-5 h-5 text-white/30" />
-                              <span className="text-white/30 text-sm">Click to upload files (PDF, DOC, ZIP)</span>
+                              <Upload className="h-5 w-5 text-white/30" />
+                              <span className="text-sm text-white/30">
+                                Click to upload files
+                              </span>
                             </>
                           )}
                         </button>
+
                         <input
-                          ref={el => { fileInputRefs.current[q.id] = el; }}
+                          ref={(el) => {
+                            fileInputRefs.current[question.id] = el;
+                          }}
                           type="file"
                           multiple
-                          accept=".pdf,.doc,.docx,.zip,.txt,.xls,.xlsx,.ppt,.pptx"
-                          onChange={(e) => handleFileSelect(q.id, e)}
-                          style={{ display: "none" }}
+                          accept={
+                            question.type === "image"
+                              ? "image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                              : ".pdf,.doc,.docx,.zip,.txt,.xls,.xlsx,.ppt,.pptx"
+                          }
+                          onChange={(e) => handleFileSelect(question.id, e)}
+                          className="hidden"
                         />
-                        {qPreviews.length > 0 && (
+
+                        {previews.length > 0 && question.type === "file" && (
                           <div className="space-y-2">
-                            {qPreviews.map((file, fIndex) => (
-                              <div key={fIndex} className="flex items-center gap-2 p-2 rounded-lg bg-[#1a1a1a] border border-white/10">
-                                <FileCheck className="w-4 h-4 text-[#FF6B00]" />
-                                <span className="text-white text-sm flex-1 truncate">{file.name}</span>
+                            {previews.map((file, fileIndex) => (
+                              <div
+                                key={`${file.name}-${fileIndex}`}
+                                className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#1a1a1a] p-2"
+                              >
+                                <FileCheck className="h-4 w-4 text-[#FF6B00]" />
+                                <span className="flex-1 truncate text-sm text-white">
+                                  {file.name}
+                                </span>
                                 <button
                                   type="button"
-                                  onClick={() => handleRemoveFile(q.id, fIndex)}
-                                  className="text-white/30 hover:text-red-400 p-1"
+                                  onClick={() =>
+                                    handleRemoveFile(question.id, fileIndex)
+                                  }
+                                  className="p-1 text-white/30 hover:text-red-400"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <X className="h-4 w-4" />
                                 </button>
                               </div>
                             ))}
                           </div>
                         )}
-                      </div>
-                    )}
 
-                    {q.type === "image" && (
-                      <div className="space-y-3">
-                        <button
-                          type="button"
-                          onClick={() => triggerFileInput(q.id)}
-                          className="w-full h-20 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-[#FF6B00]/50 hover:bg-[#FF6B00]/5 transition-all cursor-pointer"
-                        >
-                          {isUploading ? (
-                            <Loader2 className="w-5 h-5 text-[#FF6B00] animate-spin" />
-                          ) : (
-                            <>
-                              <Image className="w-5 h-5 text-white/30" />
-                              <span className="text-white/30 text-sm">Click to upload images (PNG, JPG, GIF)</span>
-                            </>
-                          )}
-                        </button>
-                        <input
-                          ref={el => { fileInputRefs.current[q.id] = el; }}
-                          type="file"
-                          multiple
-                          accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-                          onChange={(e) => handleFileSelect(q.id, e)}
-                          style={{ display: "none" }}
-                        />
-                        {qPreviews.length > 0 && (
+                        {previews.length > 0 && question.type === "image" && (
                           <div className="grid grid-cols-3 gap-2">
-                            {qPreviews.map((file, fIndex) => (
-                              <div key={fIndex} className="relative group aspect-square rounded-lg overflow-hidden border border-white/10">
-                                <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+                            {previews.map((file, fileIndex) => (
+                              <div
+                                key={`${file.name}-${fileIndex}`}
+                                className="group relative aspect-square overflow-hidden rounded-lg border border-white/10"
+                              >
+                                <img
+                                  src={file.url}
+                                  alt={file.name}
+                                  className="h-full w-full object-cover"
+                                />
                                 <button
                                   type="button"
-                                  onClick={() => handleRemoveFile(q.id, fIndex)}
-                                  className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() =>
+                                    handleRemoveFile(question.id, fileIndex)
+                                  }
+                                  className="absolute right-1 top-1 rounded-full bg-red-500/80 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
                                 >
-                                  <X className="w-3 h-3" />
+                                  <X className="h-3 w-3" />
                                 </button>
                                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
-                                  <span className="text-white text-[10px] truncate block">{file.name}</span>
+                                  <span className="block truncate text-[10px] text-white">
+                                    {file.name}
+                                  </span>
                                 </div>
                               </div>
                             ))}
@@ -501,55 +654,59 @@ export default function PublicIntakeForm() {
                       </div>
                     )}
 
-                    {q.type === "link" && (
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <div className="flex-1 relative">
-                            <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                            <Input
-                              value={answer}
-                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                              placeholder="https://example.com"
-                              className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 pl-10"
-                            />
-                          </div>
-                          {answer && (
-                            <a
-                              href={answer}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-2 rounded-md bg-[#FF6B00]/20 text-[#FF6B00] text-sm hover:bg-[#FF6B00]/30 transition-colors flex items-center gap-1"
-                            >
-                              <Link className="w-3.5 h-3.5" />Open
-                            </a>
-                          )}
+                    {question.type === "link" && (
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Link className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/20" />
+                          <Input
+                            value={answer}
+                            onChange={(e) =>
+                              handleAnswerChange(question.id, e.target.value)
+                            }
+                            placeholder="https://example.com"
+                            className="border-white/10 bg-[#1a1a1a] pl-10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                          />
                         </div>
+
+                        {answer && (
+                          <a
+                            href={normalizeUrl(answer)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 rounded-md bg-[#FF6B00]/20 px-3 py-2 text-sm text-[#FF6B00] transition-colors hover:bg-[#FF6B00]/30"
+                          >
+                            <Link className="h-3.5 w-3.5" />
+                            Open
+                          </a>
+                        )}
                       </div>
                     )}
 
-                    {q.type === "video" && (
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <div className="flex-1 relative">
-                            <Video className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                            <Input
-                              value={answer}
-                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                              placeholder="https://youtube.com/... or https://vimeo.com/..."
-                              className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] focus:ring-[#FF6B00]/20 pl-10"
-                            />
-                          </div>
-                          {answer && (
-                            <a
-                              href={answer}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-2 rounded-md bg-[#FF6B00]/20 text-[#FF6B00] text-sm hover:bg-[#FF6B00]/30 transition-colors flex items-center gap-1"
-                            >
-                              <Video className="w-3.5 h-3.5" />Watch
-                            </a>
-                          )}
+                    {question.type === "video" && (
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Video className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/20" />
+                          <Input
+                            value={answer}
+                            onChange={(e) =>
+                              handleAnswerChange(question.id, e.target.value)
+                            }
+                            placeholder="https://youtube.com/... or https://vimeo.com/..."
+                            className="border-white/10 bg-[#1a1a1a] pl-10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                          />
                         </div>
+
+                        {answer && (
+                          <a
+                            href={normalizeUrl(answer)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 rounded-md bg-[#FF6B00]/20 px-3 py-2 text-sm text-[#FF6B00] transition-colors hover:bg-[#FF6B00]/30"
+                          >
+                            <Video className="h-3.5 w-3.5" />
+                            Watch
+                          </a>
+                        )}
                       </div>
                     )}
                   </div>
@@ -563,22 +720,23 @@ export default function PublicIntakeForm() {
           <Button
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white h-12 text-lg font-semibold"
+            className="h-12 w-full bg-[#FF6B00] text-lg font-semibold text-white hover:bg-[#FF6B00]/90"
           >
             {submitting ? (
               <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Submitting...
               </>
             ) : (
               <>
-                <Send className="w-5 h-5 mr-2" />
+                <Send className="mr-2 h-5 w-5" />
                 Submit Response
               </>
             )}
           </Button>
-          <p className="text-center text-white/30 text-xs mt-3">
-            Powered by GigVorx - Your information is secure and confidential
+
+          <p className="mt-3 text-center text-xs text-white/30">
+            Powered by GigVorx — your information is secure and confidential.
           </p>
         </div>
       </div>
