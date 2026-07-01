@@ -1,37 +1,71 @@
-import React, { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useCurrency } from "@/lib/CurrencyContext";
 import { usePlanLimits } from "@/lib/usePlanLimits";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseEnabled } from "@/lib/supabase";
+import { readGlobal, writeGlobal, uid } from "@/lib/storage";
+import { NICHES } from "@/lib/niches";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShareBriefDialog } from "@/components/ShareBriefDialog";
 import {
-  Save, Download, Link2, MessageCircle, Plus, X, ChevronDown,
-  Type, FileText, List, Upload, Image, Link, Video, CheckCircle2,
-  Loader2, Phone, Mail, User, Lock, Crown, Sparkles,
+  Save,
+  Download,
+  Link2,
+  MessageCircle,
+  Plus,
+  X,
+  Type,
+  FileText,
+  List,
+  Upload,
+  Image,
+  Link,
+  Video,
+  CheckCircle2,
+  Loader2,
+  Phone,
+  Mail,
+  User,
+  Lock,
+  Crown,
+  Sparkles,
+  ArrowLeft,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
+import { toast } from "sonner";
 
-const questionTypeIcons = {
-  text: Type, long: FileText, select: List,
-  file: Upload, image: Image, link: Link, video: Video,
-};
+const QUESTION_TYPES = [
+  { id: "text", label: "Short Answer", icon: Type },
+  { id: "long", label: "Long Answer", icon: FileText },
+  { id: "select", label: "Multiple Choice", icon: List },
+  { id: "file", label: "File Upload", icon: Upload },
+  { id: "image", label: "Image Upload", icon: Image },
+  { id: "link", label: "URL / Link", icon: Link },
+  { id: "video", label: "Video Link", icon: Video },
+];
 
-const questionTypeLabels = {
-  text: "Short Answer", long: "Long Answer", select: "Multiple Choice",
-  file: "File Upload", image: "Image Upload", link: "URL / Link", video: "Video Link",
-};
+const questionTypeLabels = Object.fromEntries(
+  QUESTION_TYPES.map((type) => [type.id, type.label])
+);
+
+const questionTypeIcons = Object.fromEntries(
+  QUESTION_TYPES.map((type) => [type.id, type.icon])
+);
 
 const questionTypeColors = {
   text: "bg-blue-100 text-blue-700 border-blue-200",
@@ -43,472 +77,147 @@ const questionTypeColors = {
   video: "bg-red-100 text-red-700 border-red-200",
 };
 
-const nicheTemplates = {
-  "Web Design": [
-    { text: "What is your business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your website URL (if existing)?", type: "link" },
-    { text: "What are your social media handles? (Instagram, Facebook, Twitter etc.)", type: "long" },
-    { text: "Describe your business in a few sentences", type: "long" },
-    { text: "Do you have an existing website?", type: "select", options: ["Yes, I need a redesign", "No, this is my first website", "I have a landing page only"] },
-    { text: "Share reference websites you like", type: "link" },
-    { text: "Upload your logo and brand assets", type: "image" },
-    { text: "Upload any brand guidelines (PDF)", type: "file" },
-    { text: "What pages do you need?", type: "select", options: ["Home, About, Contact", "Home, About, Services, Contact", "Full e-commerce site", "Custom - I will specify below"] },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.25,000 / $300", "Rs.25,000 - Rs.75,000 / $300-$900", "Rs.75,000 - Rs.2,00,000 / $900-$2,400", "Above Rs.2,00,000 / $2,400+"] },
-    { text: "Do you have any content ready?", type: "select", options: ["All content is ready", "I have partial content", "I need content writing too"] },
-    { text: "Share any video references for style", type: "video" },
-    { text: "When do you need this completed?", type: "text" },
-  ],
-  "Social Media": [
-    { text: "What is your brand/business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What are your current social media handles?", type: "long" },
-    { text: "Which platforms do you need content for?", type: "select", options: ["Instagram only", "Instagram + Facebook", "All major platforms", "YouTube Shorts + Reels"] },
-    { text: "Describe your target audience", type: "long" },
-    { text: "What is your content goal?", type: "select", options: ["Brand awareness", "Lead generation", "Sales/conversions", "Community building"] },
-    { text: "Upload your brand logo and colors", type: "image" },
-    { text: "Share competitor or inspiration accounts", type: "link" },
-    { text: "Upload existing content or references", type: "file" },
-    { text: "How many posts per week?", type: "select", options: ["3 posts/week", "5 posts/week", "Daily posts", "Custom schedule"] },
-    { text: "Do you need caption writing too?", type: "select", options: ["Yes, include captions", "No, I will provide captions", "I need hashtag research only"] },
-    { text: "What is your monthly budget?", type: "select", options: ["Under Rs.10,000 / $120", "Rs.10,000 - Rs.30,000 / $120-$360", "Rs.30,000 - Rs.75,000 / $360-$900", "Above Rs.75,000 / $900+"] },
-    { text: "Share any video content references", type: "video" },
-  ],
-  "Graphic Design": [
-    { text: "What is your business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of design do you need?", type: "select", options: ["Logo design", "Brand identity kit", "Marketing materials", "Social media graphics", "Packaging design"] },
-    { text: "Describe your brand personality", type: "long" },
-    { text: "Upload your current logo (if any)", type: "image" },
-    { text: "Share design references you like", type: "link" },
-    { text: "Upload brand guidelines or inspiration files", type: "file" },
-    { text: "What is your preferred color palette?", type: "text" },
-    { text: "Do you need print-ready files?", type: "select", options: ["Yes, print-ready PDF/AI", "Digital only (PNG/JPG)", "Both"] },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.5,000 / $60", "Rs.5,000 - Rs.20,000 / $60-$240", "Rs.20,000 - Rs.50,000 / $240-$600", "Above Rs.50,000 / $600+"] },
-    { text: "How many design concepts do you want?", type: "select", options: ["1 concept", "2-3 concepts", "3-5 concepts", "Unlimited revisions"] },
-    { text: "Share any video mood boards", type: "video" },
-  ],
-  "Video Editing": [
-    { text: "What is your name or brand name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of video do you need edited?", type: "select", options: ["YouTube video", "Instagram Reel", "TikTok", "Corporate video", "Wedding/event video", "Ad/commercial"] },
-    { text: "What is the approximate duration?", type: "text" },
-    { text: "Upload your raw footage", type: "file" },
-    { text: "Share reference videos for style", type: "video" },
-    { text: "Describe the desired editing style", type: "long" },
-    { text: "Do you need color grading?", type: "select", options: ["Yes, cinematic color grade", "Basic color correction", "No, keep it natural"] },
-    { text: "Do you need motion graphics or titles?", type: "select", options: ["Full motion graphics package", "Simple titles only", "No graphics needed"] },
-    { text: "Upload your logo for intro/outro", type: "image" },
-    { text: "Share music or audio references", type: "link" },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.5,000 / $60", "Rs.5,000 - Rs.15,000 / $60-$180", "Rs.15,000 - Rs.50,000 / $180-$600", "Above Rs.50,000 / $600+"] },
-    { text: "What is your deadline?", type: "text" },
-  ],
-  "SEO": [
-    { text: "What is your business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your website URL?", type: "link" },
-    { text: "What industry are you in?", type: "text" },
-    { text: "What are your target keywords?", type: "long" },
-    { text: "Who are your main competitors?", type: "text" },
-    { text: "Upload your current analytics report", type: "file" },
-    { text: "What is your current monthly traffic?", type: "select", options: ["Under 1,000 visitors", "1,000 - 10,000", "10,000 - 50,000", "50,000+"] },
-    { text: "What SEO services do you need?", type: "select", options: ["On-page SEO only", "Off-page / link building", "Technical SEO audit", "Full SEO package"] },
-    { text: "Do you have a blog/content strategy?", type: "select", options: ["Yes, active blog", "Yes, but inactive", "No blog yet", "Need content strategy too"] },
-    { text: "What is your monthly SEO budget?", type: "select", options: ["Under Rs.15,000 / $180", "Rs.15,000 - Rs.50,000 / $180-$600", "Rs.50,000 - Rs.1,50,000 / $600-$1,800", "Above Rs.1,50,000 / $1,800+"] },
-    { text: "Share any video tutorials or references", type: "video" },
-  ],
-  "Content Writing": [
-    { text: "What is your name or business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of content do you need?", type: "select", options: ["Blog articles", "Website copy", "Product descriptions", "Email sequences", "Social media captions", "Technical documentation"] },
-    { text: "Describe your target audience", type: "long" },
-    { text: "What is the tone of voice?", type: "select", options: ["Professional/formal", "Casual/friendly", "Witty/humorous", "Authoritative/expert", "Sales-driven"] },
-    { text: "Share reference articles or style guides", type: "link" },
-    { text: "Upload any existing content briefs", type: "file" },
-    { text: "How many words per piece?", type: "select", options: ["500-1,000 words", "1,000-2,000 words", "2,000-3,000 words", "3,000+ words"] },
-    { text: "Do you need keyword research included?", type: "select", options: ["Yes, include keywords", "No, I will provide keywords", "I need full SEO strategy"] },
-    { text: "What is your budget per article?", type: "select", options: ["Under Rs.1,000 / $12", "Rs.1,000 - Rs.3,000 / $12-$36", "Rs.3,000 - Rs.7,000 / $36-$84", "Above Rs.7,000 / $84+"] },
-    { text: "How many pieces do you need?", type: "text" },
-  ],
-  "UI/UX Design": [
-    { text: "What is your name or business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of product are you designing for?", type: "select", options: ["Mobile app", "Web app", "SaaS dashboard", "E-commerce", "Landing page"] },
-    { text: "Describe your target users", type: "long" },
-    { text: "Do you have existing designs?", type: "select", options: ["Yes, need a redesign", "No, starting from scratch", "I have wireframes only"] },
-    { text: "Upload your current designs or wireframes", type: "image" },
-    { text: "Share competitor products or references", type: "link" },
-    { text: "Upload user research or persona docs", type: "file" },
-    { text: "What deliverables do you need?", type: "select", options: ["UI design only", "UX research + UI design", "Full prototype + design system", "Design system only"] },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.30,000 / $360", "Rs.30,000 - Rs.1,00,000 / $360-$1,200", "Rs.1,00,000 - Rs.3,00,000 / $1,200-$3,600", "Above Rs.3,00,000 / $3,600+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Logo Design": [
-    { text: "What is your business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What does your business do?", type: "long" },
-    { text: "Who is your target audience?", type: "text" },
-    { text: "What style do you prefer?", type: "select", options: ["Minimalist/modern", "Vintage/classic", "Playful/fun", "Luxury/elegant", "Tech/futuristic", "Hand-drawn/artistic"] },
-    { text: "Upload any existing branding", type: "image" },
-    { text: "Share logo references you like", type: "link" },
-    { text: "What colors do you prefer?", type: "text" },
-    { text: "Do you need additional brand assets?", type: "select", options: ["Logo only", "Logo + business card", "Full brand identity kit", "Logo + social media kit"] },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.3,000 / $36", "Rs.3,000 - Rs.10,000 / $36-$120", "Rs.10,000 - Rs.30,000 / $120-$360", "Above Rs.30,000 / $360+"] },
-    { text: "How many concepts do you want?", type: "select", options: ["1 concept", "2-3 concepts", "3-5 concepts"] },
-    { text: "Upload any inspiration images", type: "image" },
-  ],
-  "App Development": [
-    { text: "What is your name or business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of app do you need?", type: "select", options: ["iOS app", "Android app", "Cross-platform (Flutter/React Native)", "Progressive Web App", "SaaS platform"] },
-    { text: "Describe the core functionality", type: "long" },
-    { text: "Do you have wireframes or designs?", type: "select", options: ["Yes, designs are ready", "I have rough wireframes", "No, I need design too", "I need full UX/UI + dev"] },
-    { text: "Upload your designs or wireframes", type: "image" },
-    { text: "Share similar apps or references", type: "link" },
-    { text: "Upload technical specs or API docs", type: "file" },
-    { text: "Do you need backend development too?", type: "select", options: ["Yes, full-stack needed", "Frontend only", "Backend only", "API integration only"] },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.1,00,000 / $1,200", "Rs.1,00,000 - Rs.5,00,000 / $1,200-$6,000", "Rs.5,00,000 - Rs.20,00,000 / $6,000-$24,000", "Above Rs.20,00,000 / $24,000+"] },
-    { text: "What is your launch timeline?", type: "text" },
-  ],
-  "Photography": [
-    { text: "What is your name or brand name?", type: "text" },
-    { text: "What is your email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of photography do you need?", type: "select", options: ["Product photography", "Portrait/headshots", "Event coverage", "Real estate", "Food photography", "Fashion/lifestyle"] },
-    { text: "Describe the shoot requirements", type: "long" },
-    { text: "How many final images do you need?", type: "text" },
-    { text: "Upload reference photos or mood board", type: "image" },
-    { text: "Share reference photography styles", type: "link" },
-    { text: "Do you need editing/retouching included?", type: "select", options: ["Yes, full editing included", "Basic color correction only", "Raw files only, no editing"] },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.5,000 / $60", "Rs.5,000 - Rs.20,000 / $60-$240", "Rs.20,000 - Rs.75,000 / $240-$900", "Above Rs.75,000 / $900+"] },
-    { text: "What is the shoot location and date?", type: "text" },
-  ],
-  "Illustration": [
-    { text: "What is your name or brand name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of illustration do you need?", type: "select", options: ["Digital illustration", "Vector art", "Character design", "Book illustration", "Infographic", "Custom icon set"] },
-    { text: "Describe the illustration concept", type: "long" },
-    { text: "What art style do you prefer?", type: "select", options: ["Flat/minimalist", "Detailed/realistic", "Cartoon/playful", "Watercolor/artistic", "3D/rendered", "Line art"] },
-    { text: "Upload reference images or sketches", type: "image" },
-    { text: "Share art style references", type: "link" },
-    { text: "What is the intended use?", type: "select", options: ["Website", "Print/marketing", "Social media", "Book/publication", "Merchandise", "App/UI"] },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.3,000 / $36", "Rs.3,000 - Rs.10,000 / $36-$120", "Rs.10,000 - Rs.30,000 / $120-$360", "Above Rs.30,000 / $360+"] },
-    { text: "How many illustrations do you need?", type: "text" },
-  ],
-  "Branding": [
-    { text: "What is your business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What are your social media handles?", type: "long" },
-    { text: "What industry are you in?", type: "text" },
-    { text: "Describe your brand vision and values", type: "long" },
-    { text: "Do you have an existing brand?", type: "select", options: ["Complete rebrand needed", "Refresh existing brand", "New brand from scratch"] },
-    { text: "Upload your current logo and assets", type: "image" },
-    { text: "Share brand references you admire", type: "link" },
-    { text: "What deliverables do you need?", type: "select", options: ["Logo only", "Logo + color palette + fonts", "Full brand identity kit", "Brand identity + brand guidelines book"] },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.15,000 / $180", "Rs.15,000 - Rs.50,000 / $180-$600", "Rs.50,000 - Rs.1,50,000 / $600-$1,800", "Above Rs.1,50,000 / $1,800+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Marketing Strategy": [
-    { text: "What is your business name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your website URL?", type: "link" },
-    { text: "What are your social media handles?", type: "long" },
-    { text: "What industry/market are you in?", type: "text" },
-    { text: "Describe your current marketing efforts", type: "long" },
-    { text: "What are your marketing goals?", type: "select", options: ["Increase brand awareness", "Generate leads", "Drive sales", "Launch a new product", "Enter a new market"] },
-    { text: "What channels do you currently use?", type: "select", options: ["Social media only", "Email + social", "SEO + content", "Paid ads only", "Multi-channel"] },
-    { text: "What is your monthly marketing budget?", type: "select", options: ["Under Rs.25,000 / $300", "Rs.25,000 - Rs.75,000 / $300-$900", "Rs.75,000 - Rs.2,00,000 / $900-$2,400", "Above Rs.2,00,000 / $2,400+"] },
-    { text: "Do you need content creation too?", type: "select", options: ["Yes, strategy + content", "Strategy only", "Content only", "I have a content team"] },
-    { text: "Upload any analytics or performance reports", type: "file" },
-  ],
-  "E-commerce": [
-    { text: "What is your store name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your store website URL (if existing)?", type: "link" },
-    { text: "What are your social media handles?", type: "long" },
-    { text: "What products do you sell?", type: "long" },
-    { text: "What platform do you use?", type: "select", options: ["Shopify", "WooCommerce", "Magento", "Custom build", "Not set up yet"] },
-    { text: "Upload your product photos", type: "image" },
-    { text: "Share competitor stores you like", type: "link" },
-    { text: "What services do you need?", type: "select", options: ["Store setup only", "Store + product listing optimization", "Full store + marketing", "Dropshipping setup"] },
-    { text: "How many products do you have?", type: "select", options: ["1-10 products", "10-50 products", "50-200 products", "200+ products"] },
-    { text: "Do you need payment gateway setup?", type: "select", options: ["Yes, Razorpay/Stripe", "Yes, PayPal", "Already configured", "Need recommendations"] },
-    { text: "What is your budget?", type: "select", options: ["Under Rs.25,000 / $300", "Rs.25,000 - Rs.75,000 / $300-$900", "Rs.75,000 - Rs.2,00,000 / $900-$2,400", "Above Rs.2,00,000 / $2,400+"] },
-    { text: "What is your target launch date?", type: "text" },
-  ],
-  "Doctors / Healthcare": [
-    { text: "What is your clinic or practice name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your medical specialty?", type: "text" },
-    { text: "What services do you offer?", type: "long" },
-    { text: "What is your clinic address and operating hours?", type: "long" },
-    { text: "Do you need online appointment booking?", type: "select", options: ["Yes, with calendar integration", "Yes, simple booking form", "No, just contact info"] },
-    { text: "Upload your clinic logo or branding", type: "image" },
-    { text: "Share patient testimonials or case studies (if shareable)", type: "long" },
-    { text: "Do you need integration with practice management software?", type: "select", options: ["Yes, I will share details", "No integration needed", "Not sure, please advise"] },
-    { text: "What languages should the website support?", type: "text" },
-    { text: "Are there compliance requirements (HIPAA, telemedicine policies)?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.25,000 / $300", "Rs.25,000 - Rs.75,000 / $300-$900", "Rs.75,000 - Rs.2,00,000 / $900-$2,400", "Above Rs.2,00,000 / $2,400+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Dentists": [
-    { text: "What is your dental practice name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What dental services do you offer?", type: "select", options: ["General dentistry", "Cosmetic dentistry", "Orthodontics", "Implants", "Full range of services"] },
-    { text: "Do you offer financing or insurance plans?", type: "long" },
-    { text: "How many locations do you operate?", type: "text" },
-    { text: "Do you want before/after galleries on the website?", type: "select", options: ["Yes, with patient consent", "No, keep it simple", "Not decided yet"] },
-    { text: "Upload your logo and clinic photos", type: "image" },
-    { text: "Is online appointment booking needed?", type: "select", options: ["Yes, with calendar sync", "Yes, simple form", "No"] },
-    { text: "What is your unique differentiator vs nearby practices?", type: "long" },
-    { text: "Do you run any patient referral or loyalty programs?", type: "long" },
-    { text: "What patient education content should be included?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.25,000 / $300", "Rs.25,000 - Rs.75,000 / $300-$900", "Rs.75,000 - Rs.2,00,000 / $900-$2,400", "Above Rs.2,00,000 / $2,400+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Restaurants": [
-    { text: "What is your restaurant name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your cuisine type and signature dishes?", type: "long" },
-    { text: "Do you have multiple locations? Share hours for each.", type: "long" },
-    { text: "Do you need online ordering, table reservations, or both?", type: "select", options: ["Online ordering only", "Table reservations only", "Both", "Neither, just a menu page"] },
-    { text: "Will you integrate with delivery platforms?", type: "select", options: ["Yes, UberEats/Zomato/Swiggy", "Yes, DoorDash", "No integration needed", "Not sure, please advise"] },
-    { text: "Upload high-quality food photography", type: "image" },
-    { text: "Will you publish your menu online with prices?", type: "select", options: ["Yes, full menu with prices", "Yes, but no prices", "No, just highlights"] },
-    { text: "Do you have a loyalty program or special events to feature?", type: "long" },
-    { text: "Who is your target customer?", type: "select", options: ["Families", "Date night/couples", "Business lunch", "Tourists", "All of the above"] },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.20,000 / $240", "Rs.20,000 - Rs.60,000 / $240-$720", "Rs.60,000 - Rs.1,50,000 / $720-$1,800", "Above Rs.1,50,000 / $1,800+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Real Estate": [
-    { text: "What is your agency or agent name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "Do you focus on residential, commercial, rentals, or all?", type: "select", options: ["Residential", "Commercial", "Rentals", "All of the above"] },
-    { text: "What geographic areas do you serve?", type: "long" },
-    { text: "Do you need MLS/IDX integration for live listings?", type: "select", options: ["Yes, integration needed", "No, manual listings are fine", "Not sure, please advise"] },
-    { text: "Upload agent photos and property images", type: "image" },
-    { text: "Do you need lead capture forms, mortgage calculators, or alerts?", type: "select", options: ["Yes, all of these", "Lead capture forms only", "No extra tools needed"] },
-    { text: "What is your typical property price range?", type: "text" },
-    { text: "Do you offer virtual tours or video walkthroughs?", type: "select", options: ["Yes, video walkthroughs", "Yes, 360 virtual tours", "No, photos only"] },
-    { text: "How do you currently generate leads and what works best?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.30,000 / $360", "Rs.30,000 - Rs.1,00,000 / $360-$1,200", "Rs.1,00,000 - Rs.3,00,000 / $1,200-$3,600", "Above Rs.3,00,000 / $3,600+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Coaching": [
-    { text: "What is your name or coaching brand name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your coaching niche?", type: "select", options: ["Life coaching", "Business coaching", "Fitness coaching", "Mindset/career coaching", "Other"] },
-    { text: "Describe your signature program or methodology", type: "long" },
-    { text: "Do you offer 1:1 coaching, group programs, courses, or all?", type: "select", options: ["1:1 only", "Group programs", "Online courses", "All of the above"] },
-    { text: "What is your price point and how do you handle payments?", type: "long" },
-    { text: "Upload testimonials, case studies, or transformation photos", type: "image" },
-    { text: "Will you need a course platform or members-only content area?", type: "select", options: ["Yes, course platform needed", "Yes, members area only", "No, just a website"] },
-    { text: "What is your content marketing approach?", type: "long" },
-    { text: "Describe the typical client journey from discovery to working with you", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.20,000 / $240", "Rs.20,000 - Rs.60,000 / $240-$720", "Rs.60,000 - Rs.1,50,000 / $720-$1,800", "Above Rs.1,50,000 / $1,800+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Salon & Spa": [
-    { text: "What is your salon or spa name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What services do you offer?", type: "select", options: ["Hair only", "Nails only", "Facials/skincare", "Massage/spa", "Full range of services"] },
-    { text: "Do you need online booking with stylist selection?", type: "select", options: ["Yes, with stylist selection", "Yes, simple booking", "No booking needed"] },
-    { text: "Will you sell retail products online?", type: "select", options: ["Yes, full e-commerce", "Yes, simple product showcase", "No"] },
-    { text: "Do you have a loyalty program or memberships?", type: "long" },
-    { text: "How many stylists or staff will have profiles on the site?", type: "text" },
-    { text: "Upload salon photos and your branding", type: "image" },
-    { text: "What is your brand aesthetic?", type: "select", options: ["Luxury", "Minimalist", "Trendy", "Organic/natural"] },
-    { text: "Will gift cards be offered online?", type: "select", options: ["Yes", "No", "Not decided yet"] },
-    { text: "Do you run any seasonal promos or packages?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.20,000 / $240", "Rs.20,000 - Rs.60,000 / $240-$720", "Rs.60,000 - Rs.1,50,000 / $720-$1,800", "Above Rs.1,50,000 / $1,800+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Gym & Fitness": [
-    { text: "What is your gym or studio name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of facility is it?", type: "select", options: ["Gym", "Boutique studio", "CrossFit", "Yoga studio", "Online/hybrid"] },
-    { text: "Do you offer classes, personal training, memberships, or all?", type: "select", options: ["Classes only", "Personal training only", "Memberships", "All of the above"] },
-    { text: "Do you need class scheduling and membership management?", type: "select", options: ["Yes, full system needed", "Yes, basic scheduling", "No, manage manually"] },
-    { text: "What payment models will you use?", type: "select", options: ["Monthly", "Annual", "Drop-in", "Packages", "Mix of all"] },
-    { text: "Will you have a member portal, app, or community features?", type: "long" },
-    { text: "Do you offer corporate or partnership memberships?", type: "long" },
-    { text: "Upload gym photos and success story images (with consent)", type: "image" },
-    { text: "What success stories or transformations can you showcase?", type: "long" },
-    { text: "Do you sell merchandise or supplements?", type: "select", options: ["Yes, merchandise", "Yes, supplements", "Both", "Neither"] },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.20,000 / $240", "Rs.20,000 - Rs.60,000 / $240-$720", "Rs.60,000 - Rs.1,50,000 / $720-$1,800", "Above Rs.1,50,000 / $1,800+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Travel & Tourism": [
-    { text: "What is your travel agency or brand name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What type of travel do you specialize in?", type: "select", options: ["Luxury travel", "Adventure travel", "Group tours", "Business travel", "All of the above"] },
-    { text: "Do you sell packages, custom itineraries, or both?", type: "select", options: ["Fixed packages only", "Custom itineraries only", "Both"] },
-    { text: "Which destinations do you focus on?", type: "long" },
-    { text: "Do you need booking integration with a GDS or supplier system?", type: "select", options: ["Yes, I will share details", "No, manual booking is fine", "Not sure, please advise"] },
-    { text: "Upload destination photos and your branding", type: "image" },
-    { text: "How will customer reviews and trip galleries be presented?", type: "long" },
-    { text: "What is your average trip price range?", type: "text" },
-    { text: "Do you have an existing customer database to migrate?", type: "select", options: ["Yes, I will share the file", "No, starting fresh"] },
-    { text: "How do you handle inquiries and follow-ups currently?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.25,000 / $300", "Rs.25,000 - Rs.75,000 / $300-$900", "Rs.75,000 - Rs.2,00,000 / $900-$2,400", "Above Rs.2,00,000 / $2,400+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Consultants": [
-    { text: "What is your name or consulting brand name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What is your consulting domain and primary services?", type: "long" },
-    { text: "Who is your ideal client?", type: "long" },
-    { text: "What is your engagement model?", type: "select", options: ["Project-based", "Retainer", "Hourly", "Value-based pricing"] },
-    { text: "What proof of expertise will you showcase?", type: "long" },
-    { text: "Upload your professional headshot and any credentials", type: "image" },
-    { text: "Will you offer free discovery calls? How should they be scheduled?", type: "select", options: ["Yes, with calendar booking", "Yes, via contact form", "No free calls"] },
-    { text: "Do you publish thought leadership content?", type: "select", options: ["Yes, blog/articles", "Yes, podcast/videos", "No, not yet"] },
-    { text: "What outcomes do your clients typically experience?", type: "long" },
-    { text: "How do most of your clients currently find you?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.20,000 / $240", "Rs.20,000 - Rs.60,000 / $240-$720", "Rs.60,000 - Rs.1,50,000 / $720-$1,800", "Above Rs.1,50,000 / $1,800+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Legal Services": [
-    { text: "What is your law firm or practice name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What practice areas do you specialize in?", type: "long" },
-    { text: "How is your firm structured?", type: "select", options: ["Solo practice", "Partnership", "Multi-attorney firm"] },
-    { text: "Do you offer free consultations? How should they be booked?", type: "select", options: ["Yes, with calendar booking", "Yes, via contact form", "No free consultations"] },
-    { text: "What jurisdictions are you licensed to practice in?", type: "text" },
-    { text: "Do you need secure client intake forms or document upload?", type: "select", options: ["Yes, secure upload needed", "No, simple contact form is fine"] },
-    { text: "Upload firm photos and attorney headshots", type: "image" },
-    { text: "How will attorney profiles and credentials be presented?", type: "long" },
-    { text: "Do you handle cases on contingency, hourly, flat fee, or mixed?", type: "select", options: ["Contingency", "Hourly", "Flat fee", "Mixed"] },
-    { text: "Are there compliance restrictions on marketing in your region?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.30,000 / $360", "Rs.30,000 - Rs.1,00,000 / $360-$1,200", "Rs.1,00,000 - Rs.3,00,000 / $1,200-$3,600", "Above Rs.3,00,000 / $3,600+"] },
-    { text: "What is your timeline?", type: "text" },
-  ],
-  "Shopify Store": [
-    { text: "What is your store name?", type: "text" },
-    { text: "What is your business email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "How many products will you launch with?", type: "select", options: ["1-10 products", "10-50 products", "50-200 products", "200+ products"] },
-    { text: "Do you have product photography, descriptions, and inventory ready?", type: "select", options: ["Yes, all ready", "Partial, need some help", "No, need full setup"] },
-    { text: "Which payment gateways and shipping carriers do you need integrated?", type: "long" },
-    { text: "Will you sell internationally? List target countries and currencies.", type: "long" },
-    { text: "Do you need specific apps?", type: "select", options: ["Subscriptions", "Reviews", "Upsells", "Loyalty program", "Multiple of these"] },
-    { text: "Upload your branding and logo", type: "image" },
-    { text: "What is your branding direction?", type: "text" },
-    { text: "Do you have an existing customer list or starting from scratch?", type: "select", options: ["Existing list to migrate", "Starting from scratch"] },
-    { text: "When is your planned launch date?", type: "text" },
-    { text: "What is your marketing plan post-launch?", type: "long" },
-    { text: "What is your budget range?", type: "select", options: ["Under Rs.30,000 / $360", "Rs.30,000 - Rs.1,00,000 / $360-$1,200", "Rs.1,00,000 - Rs.3,00,000 / $1,200-$3,600", "Above Rs.3,00,000 / $3,600+"] },
-  ],
-  "Custom": [
-    { text: "What is your name or business name?", type: "text" },
-    { text: "What is your email address?", type: "text" },
-    { text: "What is your contact number?", type: "text" },
-    { text: "What are your social media handles?", type: "long" },
-    { text: "What is your project name?", type: "text" },
-    { text: "Describe your project in detail", type: "long" },
-    { text: "What type of deliverables do you need?", type: "text" },
-    { text: "Upload any reference materials", type: "file" },
-    { text: "Share reference links", type: "link" },
-    { text: "Upload images or screenshots", type: "image" },
-    { text: "What is your budget range?", type: "text" },
-    { text: "What is your timeline?", type: "text" },
-  ],
-};
+const STATUS_OPTIONS = ["draft", "sent", "approved", "completed"];
 
-const ALL_NICHE_NAMES = Object.keys(nicheTemplates);
+function makeId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return uid();
+}
 
-// ─── ONE-TIME NICHE PICKER MODAL FOR STARTER PLAN ───
-function NichePickerModal({ open, onConfirm }) {
+function normalizeQuestions(value) {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function templateQuestions(niche) {
+  return (niche.questions || []).map((question) => ({
+    id: makeId(),
+    text: typeof question === "string" ? question : question.text,
+    type: typeof question === "string" ? "long" : question.type || "long",
+    options: typeof question === "string" ? undefined : question.options,
+    required: true,
+  }));
+}
+
+function cleanBriefPayload({
+  user,
+  clientName,
+  clientEmail,
+  clientPhone,
+  projectTitle,
+  description,
+  budget,
+  timeline,
+  status,
+  questions,
+  answers,
+  confirmed,
+  currency,
+}) {
+  return {
+    user_id: user.id,
+    userId: user.id,
+    client_name: clientName.trim(),
+    client_email: clientEmail.trim(),
+    client_phone: clientPhone.trim(),
+    title: projectTitle.trim(),
+    description: description.trim(),
+    budget: budget.trim(),
+    timeline: timeline.trim(),
+    status,
+    questions: questions.map((question) => ({
+      ...question,
+      id: question.id || makeId(),
+    })),
+    answers,
+    confirmed,
+    currency,
+  };
+}
+
+function NichePickerModal({ open, onConfirm, saving }) {
   const [selected, setSelected] = useState([]);
 
-  const toggle = (niche) => {
-    if (selected.includes(niche)) {
-      setSelected(selected.filter(n => n !== niche));
-    } else if (selected.length < 5) {
-      setSelected([...selected, niche]);
+  const toggle = (nicheName) => {
+    if (selected.includes(nicheName)) {
+      setSelected(selected.filter((item) => item !== nicheName));
+      return;
+    }
+
+    if (selected.length < 5) {
+      setSelected([...selected, nicheName]);
     }
   };
 
   return (
     <Dialog open={open}>
       <DialogContent
-        className="bg-[#111] border-white/10 text-white max-w-2xl max-h-[85vh] overflow-y-auto"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
+        className="max-h-[85vh] max-w-2xl overflow-y-auto border-white/10 bg-[#111] text-white"
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle className="text-white flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-amber-400" />
+          <DialogTitle className="flex items-center gap-2 text-white">
+            <Sparkles className="h-5 w-5 text-amber-400" />
             Choose your 5 niches
           </DialogTitle>
           <DialogDescription className="text-white/50">
-            As a Starter plan user, pick exactly 5 niche templates you want to use.
-            <span className="text-amber-400 font-medium"> This choice is permanent and cannot be changed later</span> unless you upgrade to Pro, Premium, or Agency for all niches.
+            Starter plan users can choose 5 permanent niche templates. Upgrade
+            later for all niches.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
-          {ALL_NICHE_NAMES.map((niche) => {
-            const isSelected = selected.includes(niche);
-            const isDisabled = !isSelected && selected.length >= 5;
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {NICHES.map((niche) => {
+            const selectedNow = selected.includes(niche.name);
+            const disabled = !selectedNow && selected.length >= 5;
+
             return (
               <button
-                key={niche}
+                key={niche.name}
                 type="button"
-                disabled={isDisabled}
-                onClick={() => toggle(niche)}
-                className={`p-3 rounded-lg border text-left text-sm font-medium transition-all ${
-                  isSelected
-                    ? "bg-amber-500/20 border-amber-500 text-amber-300"
-                    : isDisabled
-                    ? "bg-white/[0.02] border-white/5 text-white/20 cursor-not-allowed"
-                    : "bg-white/5 border-white/10 text-white/80 hover:border-white/30"
+                disabled={disabled}
+                onClick={() => toggle(niche.name)}
+                className={`rounded-lg border p-3 text-left text-sm font-medium transition-all ${
+                  selectedNow
+                    ? "border-amber-500 bg-amber-500/20 text-amber-300"
+                    : disabled
+                    ? "cursor-not-allowed border-white/5 bg-white/[0.02] text-white/20"
+                    : "border-white/10 bg-white/5 text-white/80 hover:border-white/30"
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  {isSelected && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
-                  <span>{niche}</span>
+                  {selectedNow && <CheckCircle2 className="h-3.5 w-3.5" />}
+                  <span>{niche.name}</span>
                 </div>
               </button>
             );
           })}
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-white/10 mt-4">
-          <p className="text-sm text-white/50">
-            {selected.length} / 5 selected
-          </p>
+        <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
+          <p className="text-sm text-white/50">{selected.length} / 5 selected</p>
           <Button
-            disabled={selected.length !== 5}
+            disabled={selected.length !== 5 || saving}
             onClick={() => onConfirm(selected)}
-            className="bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-30"
+            className="bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40"
           >
-            <CheckCircle2 className="w-4 h-4 mr-1.5" />
-            Confirm my 5 niches
+            {saving ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="mr-1.5 h-4 w-4" />
+            )}
+            Confirm niches
           </Button>
         </div>
       </DialogContent>
@@ -521,10 +230,9 @@ export default function BriefEditor() {
   const navigate = useNavigate();
   const { user, saveChosenNiches } = useAuth();
   const { currency } = useCurrency();
-  const { isStarter, isPro: isProPlan } = usePlanLimits();
-  const { toast } = useToast();
+  const { canAddBrief, isStarter, isPro } = usePlanLimits();
 
-  const editing = id && id !== "new";
+  const editing = Boolean(id && id !== "new");
 
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -542,62 +250,65 @@ export default function BriefEditor() {
   const [savedTemplates, setSavedTemplates] = useState([]);
   const [activeTab, setActiveTab] = useState("details");
   const [saving, setSaving] = useState(false);
-  const [loadingBrief, setLoadingBrief] = useState(false);
+  const [loadingBrief, setLoadingBrief] = useState(editing);
   const [briefData, setBriefData] = useState(null);
   const [savingNiches, setSavingNiches] = useState(false);
 
-  // Determines which niches this user can use right now
-  // Trial: all niches. Pro/Premium/Agency: all niches.
-  // Starter with chosen niches saved: only those 5.
-  // Starter with no chosen niches yet: must pick (picker shows).
-  const isNicheAllowed = (nicheName) => {
-    if (!isStarter) return true; // trial, pro, premium, agency all get everything
-    if (!user?.chosenNiches) return false; // hasn't picked yet
-    return user.chosenNiches.includes(nicheName);
-  };
+  const chosenNiches = user?.chosenNiches || user?.chosen_niches || null;
+  const needsNichePicker = isStarter && !chosenNiches;
 
-  const needsNichePicker = isStarter && !user?.chosenNiches;
+  const isNicheAllowed = useCallback(
+    (nicheName) => {
+      if (!isStarter) return true;
+      return Array.isArray(chosenNiches) && chosenNiches.includes(nicheName);
+    },
+    [isStarter, chosenNiches]
+  );
 
-  const handleConfirmNiches = async (selectedNiches) => {
-    setSavingNiches(true);
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const key = `gigvorx_templates_${user.id}`;
     try {
-      await saveChosenNiches(selectedNiches);
-      toast({ title: "Your 5 niches are saved!", description: "This selection is permanent on the Starter plan." });
-    } catch (err) {
-      toast({ title: "Failed to save niches", description: err.message, variant: "destructive" });
-    } finally {
-      setSavingNiches(false);
+      const stored = localStorage.getItem(key);
+      if (stored) setSavedTemplates(JSON.parse(stored));
+    } catch {
+      setSavedTemplates([]);
     }
-  };
+  }, [user?.id]);
 
-  useEffect(() => {
-    if (user?.id) {
-      const key = `gigvorx_templates_${user.id}`;
-      try {
-        const stored = localStorage.getItem(key);
-        if (stored) setSavedTemplates(JSON.parse(stored));
-      } catch {}
-    }
-  }, [user]);
+  const loadBrief = useCallback(async () => {
+    if (!editing || !user?.id) return;
 
-  useEffect(() => {
-    if (editing && user?.id) loadBrief();
-  }, [id, user]);
-
-  const loadBrief = async () => {
     setLoadingBrief(true);
+
     try {
-      const { data, error } = await supabase
-        .from("briefs")
-        .select("*")
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .single();
-      if (error || !data) {
-        toast({ title: "Brief not found", variant: "destructive" });
+      let data = null;
+
+      if (isSupabaseEnabled) {
+        const res = await supabase
+          .from("briefs")
+          .select("*")
+          .eq("id", id)
+          .eq("user_id", user.id)
+          .single();
+
+        if (res.error) throw res.error;
+        data = res.data;
+      } else {
+        data = readGlobal("briefs", []).find(
+          (brief) =>
+            brief.id === id &&
+            (brief.user_id === user.id || brief.userId === user.id)
+        );
+      }
+
+      if (!data) {
+        toast.error("Brief not found");
         navigate("/briefs");
         return;
       }
+
       setClientName(data.client_name || "");
       setClientEmail(data.client_email || "");
       setClientPhone(data.client_phone || "");
@@ -606,511 +317,910 @@ export default function BriefEditor() {
       setBudget(data.budget || "");
       setTimeline(data.timeline || "");
       setStatus(data.status || "draft");
-      setQuestions(data.questions || []);
+      setQuestions(normalizeQuestions(data.questions));
       setAnswers(data.answers || {});
-      setConfirmed(data.confirmed || false);
+      setConfirmed(Boolean(data.confirmed));
       setBriefData(data);
     } catch (err) {
-      toast({ title: "Error loading brief", variant: "destructive" });
+      console.error("Error loading brief:", err);
+      toast.error("Error loading brief");
+      navigate("/briefs");
     } finally {
       setLoadingBrief(false);
+    }
+  }, [editing, id, navigate, user?.id]);
+
+  useEffect(() => {
+    loadBrief();
+  }, [loadBrief]);
+
+  const handleConfirmNiches = async (selectedNiches) => {
+    if (!saveChosenNiches) {
+      toast.error("Niche saving is not available yet.");
+      return;
+    }
+
+    setSavingNiches(true);
+
+    try {
+      await saveChosenNiches(selectedNiches);
+      toast.success("Your 5 niches are saved.");
+    } catch (err) {
+      toast.error(err.message || "Failed to save niches");
+    } finally {
+      setSavingNiches(false);
     }
   };
 
   const handleSave = async () => {
+    if (!user?.id) {
+      toast.error("Please sign in again.");
+      return;
+    }
+
+    if (!editing && !canAddBrief) {
+      toast.error("Brief limit reached. Upgrade to create more briefs.");
+      navigate("/pricing-app");
+      return;
+    }
+
     if (!projectTitle.trim()) {
-      toast({ title: "Project title is required", variant: "destructive" });
+      toast.error("Project title is required");
+      setActiveTab("details");
       return;
     }
+
     if (!clientName.trim()) {
-      toast({ title: "Client name is required", variant: "destructive" });
+      toast.error("Client name is required");
+      setActiveTab("details");
       return;
     }
+
     if (!confirmed) {
-      toast({ title: "Please confirm the information is accurate", variant: "destructive" });
+      toast.error("Please confirm the information is accurate");
+      setActiveTab("details");
       return;
     }
+
     setSaving(true);
-    const payload = {
-      user_id: user.id,
-      client_name: clientName.trim(),
-      client_email: clientEmail.trim(),
-      client_phone: clientPhone.trim(),
-      title: projectTitle.trim(),
-      description: description.trim(),
-      budget: budget.trim(),
-      timeline: timeline.trim(),
-      status,
-      questions: questions.map(q => ({ ...q, id: q.id || crypto.randomUUID() })),
-      answers,
-      confirmed,
-      currency,
-      updated_at: new Date().toISOString(),
-    };
+
     try {
+      const now = new Date().toISOString();
+      const payload = cleanBriefPayload({
+        user,
+        clientName,
+        clientEmail,
+        clientPhone,
+        projectTitle,
+        description,
+        budget,
+        timeline,
+        status,
+        questions,
+        answers,
+        confirmed,
+        currency,
+      });
+
       if (editing) {
-        const { error } = await supabase
-          .from("briefs")
-          .update(payload)
-          .eq("id", id)
-          .eq("user_id", user.id);
-        if (error) throw error;
-        toast({ title: "Brief updated successfully" });
+        if (isSupabaseEnabled) {
+          const { error } = await supabase
+            .from("briefs")
+            .update({
+              ...payload,
+              updated_at: now,
+            })
+            .eq("id", id)
+            .eq("user_id", user.id);
+
+          if (error) throw error;
+        } else {
+          writeGlobal(
+            "briefs",
+            readGlobal("briefs", []).map((brief) =>
+              brief.id === id &&
+              (brief.user_id === user.id || brief.userId === user.id)
+                ? { ...brief, ...payload, updatedAt: now }
+                : brief
+            )
+          );
+        }
+
+        toast.success("Brief updated successfully");
         await loadBrief();
       } else {
-        const { data: newBrief, error } = await supabase
-          .from("briefs")
-          .insert({
+        const newId = makeId();
+        const shareToken = makeId();
+
+        if (isSupabaseEnabled) {
+          const { data: newBrief, error } = await supabase
+            .from("briefs")
+            .insert({
+              ...payload,
+              created_at: now,
+              updated_at: now,
+              share_token: shareToken,
+              share_enabled: true,
+            })
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          toast.success("Brief created successfully");
+          navigate(`/briefs/${newBrief.id}`);
+        } else {
+          const newBrief = {
+            id: newId,
             ...payload,
-            created_at: new Date().toISOString(),
-            share_token: crypto.randomUUID(),
+            createdAt: now,
+            updatedAt: now,
+            share_token: shareToken,
             share_enabled: true,
-          })
-          .select()
-          .single();
-        if (error) throw error;
-        toast({ title: "Brief created successfully" });
-        navigate(`/briefs/${newBrief.id}`);
+          };
+
+          writeGlobal("briefs", [newBrief, ...readGlobal("briefs", [])]);
+          toast.success("Brief created successfully");
+          navigate(`/briefs/${newId}`);
+        }
       }
     } catch (err) {
-      toast({ title: "Error saving brief", description: err.message, variant: "destructive" });
+      console.error("Error saving brief:", err);
+      toast.error(err.message || "Error saving brief");
     } finally {
       setSaving(false);
     }
   };
 
   const handleAnswerChange = (questionId, value) => {
-    setAnswers(prev => ({ ...prev, [questionId]: value }));
+    setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
   const handleAddQuestion = (type) => {
-    const newQuestion = {
-      id: crypto.randomUUID(),
-      text: "",
-      type,
-      options: type === "select" ? ["Option 1", "Option 2"] : undefined,
-      required: false,
-    };
-    setQuestions([...questions, newQuestion]);
+    setQuestions((prev) => [
+      ...prev,
+      {
+        id: makeId(),
+        text: "",
+        type,
+        options: type === "select" ? ["Option 1", "Option 2"] : undefined,
+        required: false,
+      },
+    ]);
+
     setAddQuestionDialogOpen(false);
   };
 
   const handleUpdateQuestion = (index, updates) => {
-    const updated = [...questions];
-    updated[index] = { ...updated[index], ...updates };
-    setQuestions(updated);
+    setQuestions((prev) =>
+      prev.map((question, questionIndex) =>
+        questionIndex === index ? { ...question, ...updates } : question
+      )
+    );
   };
 
   const handleDeleteQuestion = (index) => {
-    const updated = [...questions];
-    updated.splice(index, 1);
-    setQuestions(updated);
+    setQuestions((prev) => prev.filter((_, questionIndex) => questionIndex !== index));
   };
 
   const handleMoveQuestion = (index, direction) => {
-    if ((direction === -1 && index === 0) || (direction === 1 && index === questions.length - 1)) return;
+    const targetIndex = index + direction;
+
+    if (targetIndex < 0 || targetIndex >= questions.length) return;
+
     const updated = [...questions];
-    const temp = updated[index];
-    updated[index] = updated[index + direction];
-    updated[index + direction] = temp;
+    const current = updated[index];
+
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = current;
+
     setQuestions(updated);
   };
 
-  const handleAddOption = (qIndex) => {
-    const updated = [...questions];
-    updated[qIndex].options = [...(updated[qIndex].options || []), `Option ${(updated[qIndex].options || []).length + 1}`];
-    setQuestions(updated);
+  const handleAddOption = (questionIndex) => {
+    setQuestions((prev) =>
+      prev.map((question, index) =>
+        index === questionIndex
+          ? {
+              ...question,
+              options: [
+                ...(question.options || []),
+                `Option ${(question.options || []).length + 1}`,
+              ],
+            }
+          : question
+      )
+    );
   };
 
-  const handleUpdateOption = (qIndex, oIndex, value) => {
-    const updated = [...questions];
-    updated[qIndex].options[oIndex] = value;
-    setQuestions(updated);
+  const handleUpdateOption = (questionIndex, optionIndex, value) => {
+    setQuestions((prev) =>
+      prev.map((question, index) => {
+        if (index !== questionIndex) return question;
+
+        const options = [...(question.options || [])];
+        options[optionIndex] = value;
+
+        return { ...question, options };
+      })
+    );
   };
 
-  const handleDeleteOption = (qIndex, oIndex) => {
-    const updated = [...questions];
-    updated[qIndex].options.splice(oIndex, 1);
-    setQuestions(updated);
+  const handleDeleteOption = (questionIndex, optionIndex) => {
+    setQuestions((prev) =>
+      prev.map((question, index) => {
+        if (index !== questionIndex) return question;
+
+        return {
+          ...question,
+          options: (question.options || []).filter(
+            (_, currentIndex) => currentIndex !== optionIndex
+          ),
+        };
+      })
+    );
   };
 
   const handleSaveTemplate = () => {
     if (!user?.id) return;
+
     const key = `gigvorx_templates_${user.id}`;
     const template = {
-      id: crypto.randomUUID(),
+      id: makeId(),
       name: `${projectTitle || "Untitled"} Template`,
       questions: [...questions],
       createdAt: new Date().toISOString(),
     };
+
     const updated = [...savedTemplates, template];
     localStorage.setItem(key, JSON.stringify(updated));
     setSavedTemplates(updated);
-    toast({ title: "Template saved" });
+    toast.success("Template saved");
   };
 
   const handleLoadTemplate = (template) => {
-    setQuestions([...template.questions.map(q => ({ ...q, id: crypto.randomUUID() }))]);
-    toast({ title: `Loaded ${template.name}` });
+    setQuestions(
+      normalizeQuestions(template.questions).map((question) => ({
+        ...question,
+        id: makeId(),
+      }))
+    );
+    toast.success(`Loaded ${template.name}`);
   };
 
   const handleDeleteTemplate = (templateId) => {
-    const updated = savedTemplates.filter(t => t.id !== templateId);
+    const updated = savedTemplates.filter((template) => template.id !== templateId);
     setSavedTemplates(updated);
-    if (user?.id) localStorage.setItem(`gigvorx_templates_${user.id}`, JSON.stringify(updated));
+
+    if (user?.id) {
+      localStorage.setItem(`gigvorx_templates_${user.id}`, JSON.stringify(updated));
+    }
   };
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF();
+
     doc.setFontSize(20);
     doc.text(projectTitle || "Project Brief", 20, 20);
+
     doc.setFontSize(12);
-    doc.text(`Client: ${clientName}`, 20, 35);
-    doc.text(`Email: ${clientEmail}`, 20, 42);
-    doc.text(`Phone: ${clientPhone}`, 20, 49);
+    doc.text(`Client: ${clientName || "-"}`, 20, 35);
+    doc.text(`Email: ${clientEmail || "-"}`, 20, 42);
+    doc.text(`Phone: ${clientPhone || "-"}`, 20, 49);
     doc.text(`Status: ${status.toUpperCase()}`, 20, 56);
-    doc.text(`Budget: ${budget}`, 20, 63);
-    doc.text(`Timeline: ${timeline}`, 20, 70);
+    doc.text(`Budget: ${budget || "-"}`, 20, 63);
+    doc.text(`Timeline: ${timeline || "-"}`, 20, 70);
+
     doc.setFontSize(14);
     doc.text("Description:", 20, 82);
+
     doc.setFontSize(11);
-    const descLines = doc.splitTextToSize(description || "No description provided.", 170);
+    const descLines = doc.splitTextToSize(
+      description || "No description provided.",
+      170
+    );
     doc.text(descLines, 20, 89);
+
     let y = 89 + descLines.length * 5 + 10;
+
     doc.setFontSize(14);
     doc.text("Questions & Answers:", 20, y);
     y += 8;
+
     doc.setFontSize(11);
-    questions.forEach((q, i) => {
-      const qText = `${i + 1}. [${questionTypeLabels[q.type] || q.type}] ${q.text}`;
+
+    questions.forEach((question, index) => {
+      const qText = `${index + 1}. [${
+        questionTypeLabels[question.type] || question.type
+      }] ${question.text || "Untitled question"}`;
+
       const qLines = doc.splitTextToSize(qText, 170);
-      if (y + qLines.length * 5 > 280) { doc.addPage(); y = 20; }
+      if (y + qLines.length * 5 > 280) {
+        doc.addPage();
+        y = 20;
+      }
+
       doc.text(qLines, 20, y);
       y += qLines.length * 5 + 2;
-      if (answers[q.id]) {
-        const aLines = doc.splitTextToSize(`Answer: ${answers[q.id]}`, 165);
+
+      if (answers[question.id]) {
+        const aLines = doc.splitTextToSize(`Answer: ${answers[question.id]}`, 165);
         doc.setTextColor(100, 100, 100);
         doc.text(aLines, 25, y);
         doc.setTextColor(0, 0, 0);
         y += aLines.length * 5 + 2;
       }
-      if (q.options) {
-        q.options.forEach((opt, j) => {
-          const optLines = doc.splitTextToSize(`   ${String.fromCharCode(97 + j)}) ${opt}`, 160);
-          if (y + optLines.length * 5 > 280) { doc.addPage(); y = 20; }
-          doc.text(optLines, 20, y);
+
+      if (question.options?.length) {
+        question.options.forEach((option, optionIndex) => {
+          const optLines = doc.splitTextToSize(
+            `${String.fromCharCode(97 + optionIndex)}) ${option}`,
+            160
+          );
+
+          if (y + optLines.length * 5 > 280) {
+            doc.addPage();
+            y = 20;
+          }
+
+          doc.text(optLines, 25, y);
           y += optLines.length * 5 + 2;
         });
       }
+
       y += 3;
     });
+
     doc.save(`${projectTitle || "brief"}_gigvorx.pdf`);
-    toast({ title: "PDF downloaded" });
+    toast.success("PDF downloaded");
   };
 
   const handleShareWhatsApp = () => {
     if (!editing) {
-      toast({ title: "Please save the brief first before sharing", variant: "destructive" });
+      toast.error("Please save the brief first before sharing");
       return;
     }
+
     if (!briefData?.share_token) {
-      toast({ title: "Please enable sharing from the Share button first", variant: "destructive" });
+      toast.error("Please enable sharing from the Share button first");
       return;
     }
+
     const intakeLink = `${window.location.origin}/#/intake/${briefData.share_token}`;
-    const text = `Hi ${clientName},\n\nI have prepared a project brief for *${projectTitle}* on GigVorx.\n\nPlease fill in your details using this link:\n${intakeLink}\n\nIt will only take a few minutes. Let me know if you have any questions!`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    const text = `Hi ${clientName},
+
+I have prepared a project brief for ${projectTitle} on GigVorx.
+
+Please fill in your details using this link:
+${intakeLink}
+
+It will only take a few minutes. Let me know if you have any questions.`;
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(text)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
   };
 
   const handleNicheSelect = (niche) => {
-    const template = nicheTemplates[niche];
-    if (template) {
-      setQuestions(template.map(q => ({ ...q, id: crypto.randomUUID() })));
-      toast({ title: `Loaded ${niche} template with ${template.length} questions` });
+    if (!isNicheAllowed(niche.name)) {
+      navigate("/pricing-app");
+      return;
     }
+
+    const loadedQuestions = templateQuestions(niche);
+    setQuestions(loadedQuestions);
+    setActiveTab("questions");
+    toast.success(`Loaded ${niche.name} template with ${loadedQuestions.length} questions`);
   };
+
+  const allowedNiches = useMemo(() => {
+    return NICHES.filter((niche) => isNicheAllowed(niche.name));
+  }, [isNicheAllowed]);
 
   if (loadingBrief) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#FF6B00] animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#FF6B00]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
+    <div className="min-h-screen bg-[#0a0a0a] pb-20 text-white">
+      <NichePickerModal
+        open={needsNichePicker}
+        onConfirm={handleConfirmNiches}
+        saving={savingNiches}
+      />
 
-      {/* One-time niche picker for Starter plan users */}
-      <NichePickerModal open={needsNichePicker} onConfirm={handleConfirmNiches} />
-
-      <div className="border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/briefs")} className="text-white/60 hover:text-white hover:bg-white/5">Back</Button>
-            <h1 className="text-xl font-bold text-white">{editing ? "Edit Brief" : "New Brief"}</h1>
-            <Badge variant="outline" className={status === "approved" ? "border-green-500 text-green-400" : status === "sent" ? "border-blue-500 text-blue-400" : "border-yellow-500 text-yellow-400"}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/briefs")}
+              className="text-white/60 hover:bg-white/5 hover:text-white"
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Back
+            </Button>
+
+            <h1 className="text-xl font-bold text-white">
+              {editing ? "Edit Brief" : "New Brief"}
+            </h1>
+
+            <Badge
+              variant="outline"
+              className={
+                status === "approved"
+                  ? "border-green-500 text-green-400"
+                  : status === "sent"
+                  ? "border-blue-500 text-blue-400"
+                  : "border-yellow-500 text-yellow-400"
+              }
+            >
               {status}
             </Badge>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {editing && (
               <>
-                <Button variant="outline" size="sm" onClick={() => setShareOpen(true)} className="border-white/10 text-white hover:bg-white/5">
-                  <Link2 className="w-4 h-4 mr-1.5" />Share
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShareOpen(true)}
+                  className="border-white/10 text-white hover:bg-white/5"
+                >
+                  <Link2 className="mr-1.5 h-4 w-4" />
+                  Share
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => navigate(`/briefs/${id}/responses`)} className="border-green-500/30 text-green-400 hover:bg-green-500/10">
-                  <CheckCircle2 className="w-4 h-4 mr-1.5" />Responses
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/briefs/${id}/responses`)}
+                  className="border-green-500/30 text-green-400 hover:bg-green-500/10"
+                >
+                  <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                  Responses
                 </Button>
               </>
             )}
-            <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="border-white/10 text-white hover:bg-white/5">
-              <Download className="w-4 h-4 mr-1.5" />PDF
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPDF}
+              className="border-white/10 text-white hover:bg-white/5"
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={handleShareWhatsApp} className="border-white/10 text-white hover:bg-white/5">
-              <MessageCircle className="w-4 h-4 mr-1.5" />WhatsApp
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShareWhatsApp}
+              className="border-white/10 text-white hover:bg-white/5"
+            >
+              <MessageCircle className="mr-1.5 h-4 w-4" />
+              WhatsApp
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving} className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
-              {saving ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-1.5" />{editing ? "Update" : "Save"}</>}
+
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-1.5 h-4 w-4" />
+                  {editing ? "Update" : "Save"}
+                </>
+              )}
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="mx-auto max-w-5xl px-4 py-6">
+        {!editing && !canAddBrief && (
+          <Card className="mb-6 border-rose-500/30 bg-rose-500/10">
+            <CardContent className="flex items-center justify-between gap-3 pt-6">
+              <div>
+                <p className="font-semibold text-rose-300">Brief limit reached</p>
+                <p className="text-sm text-rose-200/80">
+                  Upgrade to create more briefs.
+                </p>
+              </div>
+              <Button
+                onClick={() => navigate("/pricing-app")}
+                className="bg-rose-600 text-white hover:bg-rose-700"
+              >
+                <Crown className="mr-1.5 h-4 w-4" />
+                Upgrade
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-white/5 border border-white/10 mb-6">
-            <TabsTrigger value="details" className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white">Details</TabsTrigger>
-            <TabsTrigger value="questions" className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white">Questions ({questions.length})</TabsTrigger>
-            <TabsTrigger value="fill" className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white">Fill Answers</TabsTrigger>
-            <TabsTrigger value="templates" className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white">Templates</TabsTrigger>
+          <TabsList className="mb-6 border border-white/10 bg-white/5">
+            <TabsTrigger
+              value="details"
+              className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white"
+            >
+              Details
+            </TabsTrigger>
+            <TabsTrigger
+              value="questions"
+              className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white"
+            >
+              Questions ({questions.length})
+            </TabsTrigger>
+            <TabsTrigger
+              value="fill"
+              className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white"
+            >
+              Fill Answers
+            </TabsTrigger>
+            <TabsTrigger
+              value="templates"
+              className="data-[state=active]:bg-[#FF6B00] data-[state=active]:text-white"
+            >
+              Templates
+            </TabsTrigger>
           </TabsList>
 
-          {/* DETAILS TAB */}
           <TabsContent value="details" className="space-y-6">
-            <Card className="bg-[#111] border-white/10">
+            <Card className="border-white/10 bg-[#111]">
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-[#FF6B00]" />Project Details
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <FileText className="h-5 w-5 text-[#FF6B00]" />
+                  Project Details
                 </CardTitle>
               </CardHeader>
+
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-white/80">Project Title *</Label>
-                    <Input value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} placeholder="e.g., E-commerce Website Redesign" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]" />
+                    <Input
+                      value={projectTitle}
+                      onChange={(event) => setProjectTitle(event.target.value)}
+                      placeholder="e.g., E-commerce Website Redesign"
+                      className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                    />
                   </div>
+
                   <div className="space-y-2">
                     <Label className="text-white/80">Status</Label>
-                    <Select value={status} onValueChange={setStatus}>
-                      <SelectTrigger className="bg-[#1a1a1a] border-white/10 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#1a1a1a] border-white/10">
-                        <SelectItem value="draft" className="text-white">Draft</SelectItem>
-                        <SelectItem value="sent" className="text-white">Sent</SelectItem>
-                        <SelectItem value="approved" className="text-white">Approved</SelectItem>
-                        <SelectItem value="completed" className="text-white">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select
+                      value={status}
+                      onChange={(event) => setStatus(event.target.value)}
+                      className="h-10 w-full rounded-md border border-white/10 bg-[#1a1a1a] px-3 text-sm text-white"
+                    >
+                      {STATUS_OPTIONS.map((item) => (
+                        <option key={item} value={item}>
+                          {item.charAt(0).toUpperCase() + item.slice(1)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                <div className="border border-white/10 rounded-xl p-4 space-y-4">
-                  <h3 className="text-white/80 text-sm font-semibold flex items-center gap-2">
-                    <User className="w-4 h-4 text-[#FF6B00]" />Client Information
+                <div className="space-y-4 rounded-xl border border-white/10 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-white/80">
+                    <User className="h-4 w-4 text-[#FF6B00]" />
+                    Client Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label className="text-white/80">Client Name *</Label>
-                      <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g., Rahul Sharma" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]" />
+                      <Input
+                        value={clientName}
+                        onChange={(event) => setClientName(event.target.value)}
+                        placeholder="e.g., Rahul Sharma"
+                        className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                      />
                     </div>
+
                     <div className="space-y-2">
-                      <Label className="text-white/80 flex items-center gap-1"><Mail className="w-3 h-3" />Client Email</Label>
-                      <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.com" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]" />
+                      <Label className="flex items-center gap-1 text-white/80">
+                        <Mail className="h-3 w-3" />
+                        Client Email
+                      </Label>
+                      <Input
+                        type="email"
+                        value={clientEmail}
+                        onChange={(event) => setClientEmail(event.target.value)}
+                        placeholder="client@example.com"
+                        className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                      />
                     </div>
+
                     <div className="space-y-2">
-                      <Label className="text-white/80 flex items-center gap-1"><Phone className="w-3 h-3" />Client Phone</Label>
-                      <Input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+91 98765 43210" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]" />
+                      <Label className="flex items-center gap-1 text-white/80">
+                        <Phone className="h-3 w-3" />
+                        Client Phone
+                      </Label>
+                      <Input
+                        type="tel"
+                        value={clientPhone}
+                        onChange={(event) => setClientPhone(event.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                      />
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label className="text-white/80">Project Description</Label>
-                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the project scope, goals, and any specific requirements..." rows={4} className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] resize-none" />
+                  <Textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Describe the project scope, goals, and requirements..."
+                    rows={4}
+                    className="resize-none border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                  />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-white/80">Budget ({currency})</Label>
-                    <Input value={budget} onChange={(e) => setBudget(e.target.value)} placeholder={`e.g., 50,000 ${currency === "INR" ? "Rs." : "$"}`} className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]" />
+                    <Input
+                      value={budget}
+                      onChange={(event) => setBudget(event.target.value)}
+                      placeholder={`e.g., 50,000 ${currency === "INR" ? "Rs." : "$"}`}
+                      className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                    />
                   </div>
+
                   <div className="space-y-2">
                     <Label className="text-white/80">Timeline</Label>
-                    <Input value={timeline} onChange={(e) => setTimeline(e.target.value)} placeholder="e.g., 2 weeks, by Dec 31" className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]" />
+                    <Input
+                      value={timeline}
+                      onChange={(event) => setTimeline(event.target.value)}
+                      placeholder="e.g., 2 weeks, by Dec 31"
+                      className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                    />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-[#111] border-white/10">
+            <Card className="border-white/10 bg-[#111]">
               <CardContent className="pt-6">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${confirmed ? "bg-[#FF6B00] border-[#FF6B00]" : "border-white/30 group-hover:border-white/50"}`} onClick={() => setConfirmed(!confirmed)}>
-                    {confirmed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                  </div>
-                  <span className="text-sm text-white/70">I confirm all the information provided is accurate and complete.</span>
+                <label className="group flex cursor-pointer items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmed((prev) => !prev)}
+                    className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
+                      confirmed
+                        ? "border-[#FF6B00] bg-[#FF6B00]"
+                        : "border-white/30 group-hover:border-white/50"
+                    }`}
+                  >
+                    {confirmed && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                  </button>
+
+                  <span className="text-sm text-white/70">
+                    I confirm all the information provided is accurate and complete.
+                  </span>
                 </label>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* QUESTIONS TAB */}
           <TabsContent value="questions" className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-white">Client Questions</h2>
-                <p className="text-sm text-white/50">Add questions to collect specific information from your client</p>
+                <p className="text-sm text-white/50">
+                  Add questions to collect specific information from your client.
+                </p>
               </div>
-              <div className="flex gap-2">
-                <Dialog open={addQuestionDialogOpen} onOpenChange={setAddQuestionDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
-                      <Plus className="w-4 h-4 mr-1.5" />Add Question
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-[#111] border-white/10 text-white max-w-md">
-                    <DialogHeader>
-                      <DialogTitle className="text-white">Choose Question Type</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid grid-cols-1 gap-2 mt-4">
-                      {Object.entries(questionTypeLabels).map(([type, label]) => {
-                        const Icon = questionTypeIcons[type];
-                        return (
-                          <button key={type} type="button" onClick={() => handleAddQuestion(type)} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#FF6B00]/50 transition-all text-left">
-                            <div className={`p-2 rounded-lg ${questionTypeColors[type]}`}><Icon className="w-4 h-4" /></div>
-                            <div>
-                              <div className="text-white font-medium text-sm">{label}</div>
-                              <div className="text-white/40 text-xs">
-                                {type === "text" && "Single line text answer"}
-                                {type === "long" && "Multi-line detailed answer"}
-                                {type === "select" && "Client picks one option"}
-                                {type === "file" && "Upload PDF, DOC, ZIP files"}
-                                {type === "image" && "Upload PNG, JPG, GIF images"}
-                                {type === "link" && "Share a URL or web link"}
-                                {type === "video" && "Share a video URL"}
-                              </div>
+
+              <Dialog
+                open={addQuestionDialogOpen}
+                onOpenChange={setAddQuestionDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button className="bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90">
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Add Question
+                  </Button>
+                </DialogTrigger>
+
+                <DialogContent className="max-w-md border-white/10 bg-[#111] text-white">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Choose Question Type</DialogTitle>
+                  </DialogHeader>
+
+                  <div className="mt-4 grid grid-cols-1 gap-2">
+                    {QUESTION_TYPES.map((type) => {
+                      const Icon = type.icon;
+
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => handleAddQuestion(type.id)}
+                          className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-3 text-left transition-all hover:border-[#FF6B00]/50 hover:bg-white/10"
+                        >
+                          <div
+                            className={`rounded-lg border p-2 ${
+                              questionTypeColors[type.id]
+                            }`}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-white">
+                              {type.label}
                             </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="border-white/10 text-white hover:bg-white/5">
-                      <Save className="w-4 h-4 mr-1.5" />Templates
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-[#111] border-white/10 text-white max-w-lg">
-                    <DialogHeader>
-                      <DialogTitle className="text-white">Question Templates</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 mt-4">
-                      <Button onClick={handleSaveTemplate} className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white">
-                        <Save className="w-4 h-4 mr-1.5" />Save Current Questions as Template
-                      </Button>
-                      {savedTemplates.length > 0 ? (
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-medium text-white/70">Saved Templates</h4>
-                          {savedTemplates.map((t) => (
-                            <div key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                              <div>
-                                <div className="text-white text-sm font-medium">{t.name}</div>
-                                <div className="text-white/40 text-xs">{t.questions.length} questions</div>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button size="sm" variant="ghost" onClick={() => handleLoadTemplate(t)} className="text-[#FF6B00] hover:bg-[#FF6B00]/10">Load</Button>
-                                <Button size="sm" variant="ghost" onClick={() => handleDeleteTemplate(t.id)} className="text-red-400 hover:bg-red-500/10"><X className="w-4 h-4" /></Button>
-                              </div>
+                            <div className="text-xs text-white/40">
+                              Add a {type.label.toLowerCase()} question
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-white/40 text-sm text-center py-4">No saved templates yet</p>
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
 
             <div className="space-y-3">
               {questions.length === 0 && (
-                <div className="text-center py-12 border border-dashed border-white/10 rounded-xl bg-white/[0.02]">
-                  <p className="text-white/40 text-sm">No questions yet. Click "Add Question" to get started.</p>
-                  <p className="text-white/20 text-xs mt-1">Or use a niche template from the Templates tab</p>
+                <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] py-12 text-center">
+                  <p className="text-sm text-white/40">
+                    No questions yet. Click “Add Question” or use a niche template.
+                  </p>
                 </div>
               )}
-              {questions.map((q, index) => {
-                const Icon = questionTypeIcons[q.type] || Type;
+
+              {questions.map((question, index) => {
+                const Icon = questionTypeIcons[question.type] || Type;
+
                 return (
-                  <div key={q.id} className="bg-[#111] border border-white/10 rounded-xl p-4 space-y-3 hover:border-white/20 transition-colors">
+                  <div
+                    key={question.id}
+                    className="space-y-3 rounded-xl border border-white/10 bg-[#111] p-4 transition-colors hover:border-white/20"
+                  >
                     <div className="flex items-start gap-3">
-                      <div className="mt-1 text-white/30 text-sm font-mono">{String(index + 1).padStart(2, "0")}</div>
+                      <div className="mt-1 font-mono text-sm text-white/30">
+                        {String(index + 1).padStart(2, "0")}
+                      </div>
+
                       <div className="flex-1 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Badge className={`${questionTypeColors[q.type] || questionTypeColors.text} text-xs font-medium`}>
-                            <Icon className="w-3 h-3 mr-1" />{questionTypeLabels[q.type] || q.type}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            className={`text-xs font-medium ${
+                              questionTypeColors[question.type] ||
+                              questionTypeColors.text
+                            }`}
+                          >
+                            <Icon className="mr-1 h-3 w-3" />
+                            {questionTypeLabels[question.type] || question.type}
                           </Badge>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button type="button" className="text-xs text-white/40 hover:text-[#FF6B00] flex items-center gap-1">
-                                Change Type <ChevronDown className="w-3 h-3" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="bg-[#1a1a1a] border-white/10">
-                              {Object.entries(questionTypeLabels).map(([type, label]) => {
-                                const TypeIcon = questionTypeIcons[type];
-                                return (
-                                  <DropdownMenuItem key={type} onClick={() => handleUpdateQuestion(index, { type, options: type === "select" ? (q.options || ["Option 1", "Option 2"]) : undefined })} className="text-white hover:bg-white/10 cursor-pointer">
-                                    <TypeIcon className="w-3.5 h-3.5 mr-2" />{label}
-                                  </DropdownMenuItem>
-                                );
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+
+                          <select
+                            value={question.type}
+                            onChange={(event) =>
+                              handleUpdateQuestion(index, {
+                                type: event.target.value,
+                                options:
+                                  event.target.value === "select"
+                                    ? question.options || ["Option 1", "Option 2"]
+                                    : undefined,
+                              })
+                            }
+                            className="h-7 rounded-md border border-white/10 bg-[#1a1a1a] px-2 text-xs text-white/70"
+                          >
+                            {QUESTION_TYPES.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
+
                         <Input
-                          value={q.text}
-                          onChange={(e) => handleUpdateQuestion(index, { text: e.target.value })}
+                          value={question.text}
+                          onChange={(event) =>
+                            handleUpdateQuestion(index, { text: event.target.value })
+                          }
                           placeholder="Enter your question here..."
-                          className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                          className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                         />
-                        {q.type === "select" && (
+
+                        {question.type === "select" && (
                           <div className="space-y-2">
-                            <Label className="text-white/60 text-xs">Options</Label>
-                            <div className="space-y-2">
-                              {(q.options || []).map((opt, oIndex) => (
-                                <div key={oIndex} className="flex items-center gap-2">
-                                  <div className="w-4 h-4 rounded-full border border-white/20 flex-shrink-0" />
-                                  <Input value={opt} onChange={(e) => handleUpdateOption(index, oIndex, e.target.value)} placeholder={`Option ${oIndex + 1}`} className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 text-sm focus:border-[#FF6B00]" />
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteOption(index, oIndex)} className="text-red-400 hover:bg-red-500/10 px-2"><X className="w-3.5 h-3.5" /></Button>
-                                </div>
-                              ))}
-                              <Button type="button" variant="ghost" size="sm" onClick={() => handleAddOption(index)} className="text-[#FF6B00] hover:bg-[#FF6B00]/10 text-xs">
-                                <Plus className="w-3.5 h-3.5 mr-1" />Add Option
-                              </Button>
-                            </div>
+                            <Label className="text-xs text-white/60">Options</Label>
+                            {(question.options || []).map((option, optionIndex) => (
+                              <div key={optionIndex} className="flex items-center gap-2">
+                                <div className="h-4 w-4 flex-shrink-0 rounded-full border border-white/20" />
+                                <Input
+                                  value={option}
+                                  onChange={(event) =>
+                                    handleUpdateOption(
+                                      index,
+                                      optionIndex,
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder={`Option ${optionIndex + 1}`}
+                                  className="border-white/10 bg-[#1a1a1a] text-sm text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteOption(index, optionIndex)}
+                                  className="px-2 text-red-400 hover:bg-red-500/10"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleAddOption(index)}
+                              className="text-xs text-[#FF6B00] hover:bg-[#FF6B00]/10"
+                            >
+                              <Plus className="mr-1 h-3.5 w-3.5" />
+                              Add Option
+                            </Button>
                           </div>
                         )}
                       </div>
+
                       <div className="flex flex-col gap-1">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleMoveQuestion(index, -1)} disabled={index === 0} className="text-white/30 hover:text-white hover:bg-white/5 h-7 px-2">Up</Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleMoveQuestion(index, 1)} disabled={index === questions.length - 1} className="text-white/30 hover:text-white hover:bg-white/5 h-7 px-2">Down</Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteQuestion(index)} className="text-red-400 hover:bg-red-500/10 h-7 px-2"><X className="w-4 h-4" /></Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMoveQuestion(index, -1)}
+                          disabled={index === 0}
+                          className="h-7 px-2 text-white/30 hover:bg-white/5 hover:text-white"
+                        >
+                          Up
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMoveQuestion(index, 1)}
+                          disabled={index === questions.length - 1}
+                          className="h-7 px-2 text-white/30 hover:bg-white/5 hover:text-white"
+                        >
+                          Down
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteQuestion(index)}
+                          className="h-7 px-2 text-red-400 hover:bg-red-500/10"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1119,64 +1229,99 @@ export default function BriefEditor() {
             </div>
           </TabsContent>
 
-          {/* FILL ANSWERS TAB */}
           <TabsContent value="fill" className="space-y-6">
-            <div className="bg-[#FF6B00]/10 border border-[#FF6B00]/30 rounded-xl p-4">
-              <p className="text-[#FF6B00] text-sm font-medium">📞 Freelancer Fill Mode</p>
-              <p className="text-white/60 text-xs mt-1">Fill in client answers here during a call. These answers are saved with the brief and included in the PDF.</p>
+            <div className="rounded-xl border border-[#FF6B00]/30 bg-[#FF6B00]/10 p-4">
+              <p className="text-sm font-medium text-[#FF6B00]">
+                Freelancer Fill Mode
+              </p>
+              <p className="mt-1 text-xs text-white/60">
+                Fill answers during a client call. Answers are saved with the brief
+                and included in the PDF.
+              </p>
             </div>
+
             {questions.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-white/10 rounded-xl">
-                <p className="text-white/40 text-sm">No questions yet. Add questions in the Questions tab first.</p>
+              <div className="rounded-xl border border-dashed border-white/10 py-12 text-center">
+                <p className="text-sm text-white/40">
+                  No questions yet. Add questions first.
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
-                {questions.map((q, index) => {
-                  const answer = answers[q.id] || "";
+                {questions.map((question, index) => {
+                  const answer = answers[question.id] || "";
+
                   return (
-                    <Card key={q.id} className="bg-[#111] border-white/10">
-                      <CardContent className="pt-5 pb-5 space-y-3">
+                    <Card key={question.id} className="border-white/10 bg-[#111]">
+                      <CardContent className="space-y-3 pb-5 pt-5">
                         <div className="flex items-start gap-2">
-                          <span className="text-[#FF6B00] font-bold text-sm mt-0.5">{index + 1}.</span>
-                          <p className="text-white font-medium">{q.text || "Untitled Question"}</p>
+                          <span className="mt-0.5 text-sm font-bold text-[#FF6B00]">
+                            {index + 1}.
+                          </span>
+                          <p className="font-medium text-white">
+                            {question.text || "Untitled Question"}
+                          </p>
                         </div>
+
                         <div className="pl-5">
-                          {(q.type === "text" || q.type === "link" || q.type === "video") && (
+                          {["text", "link", "video", "file", "image"].includes(
+                            question.type
+                          ) && (
                             <Input
                               value={answer}
-                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                              placeholder={q.type === "link" ? "https://..." : q.type === "video" ? "https://youtube.com/..." : "Type answer here..."}
-                              className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
+                              onChange={(event) =>
+                                handleAnswerChange(question.id, event.target.value)
+                              }
+                              placeholder={
+                                question.type === "link"
+                                  ? "https://..."
+                                  : question.type === "video"
+                                  ? "https://youtube.com/..."
+                                  : "Type answer here..."
+                              }
+                              className="border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                             />
                           )}
-                          {q.type === "long" && (
+
+                          {question.type === "long" && (
                             <Textarea
                               value={answer}
-                              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                              onChange={(event) =>
+                                handleAnswerChange(question.id, event.target.value)
+                              }
                               placeholder="Type detailed answer here..."
                               rows={3}
-                              className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00] resize-none"
+                              className="resize-none border-white/10 bg-[#1a1a1a] text-white placeholder:text-white/30 focus:border-[#FF6B00]"
                             />
                           )}
-                          {q.type === "select" && (
+
+                          {question.type === "select" && (
                             <div className="space-y-2">
-                              {(q.options || []).map((opt, oIndex) => (
-                                <label key={oIndex} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${answer === opt ? "border-[#FF6B00] bg-[#FF6B00]/10" : "border-white/10 bg-[#1a1a1a] hover:border-white/20"}`}>
-                                  <input type="radio" name={`answer-${q.id}`} value={opt} checked={answer === opt} onChange={(e) => handleAnswerChange(q.id, e.target.value)} className="w-4 h-4 accent-[#FF6B00]" />
-                                  <span className="text-white text-sm">{opt}</span>
+                              {(question.options || []).map((option, optionIndex) => (
+                                <label
+                                  key={optionIndex}
+                                  className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all ${
+                                    answer === option
+                                      ? "border-[#FF6B00] bg-[#FF6B00]/10"
+                                      : "border-white/10 bg-[#1a1a1a] hover:border-white/20"
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`answer-${question.id}`}
+                                    value={option}
+                                    checked={answer === option}
+                                    onChange={(event) =>
+                                      handleAnswerChange(
+                                        question.id,
+                                        event.target.value
+                                      )
+                                    }
+                                    className="h-4 w-4 accent-[#FF6B00]"
+                                  />
+                                  <span className="text-sm text-white">{option}</span>
                                 </label>
                               ))}
-                            </div>
-                          )}
-                          {(q.type === "file" || q.type === "image") && (
-                            <div className="space-y-2">
-                              <Input
-                                value={answer}
-                                onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                                placeholder="Paste file URL or note the file name here..."
-                                className="bg-[#1a1a1a] border-white/10 text-white placeholder:text-white/30 focus:border-[#FF6B00]"
-                              />
-                              <p className="text-white/30 text-xs">For file uploads, share the intake form link with your client so they can upload directly.</p>
                             </div>
                           )}
                         </div>
@@ -1184,98 +1329,184 @@ export default function BriefEditor() {
                     </Card>
                   );
                 })}
-                <Button onClick={handleSave} disabled={saving} className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white h-12">
-                  {saving ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Saving...</> : <><Save className="w-5 h-5 mr-2" />Save All Answers</>}
+
+                <Button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="h-12 w-full bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-5 w-5" />
+                      Save All Answers
+                    </>
+                  )}
                 </Button>
               </div>
             )}
           </TabsContent>
 
-          {/* TEMPLATES TAB */}
           <TabsContent value="templates" className="space-y-6">
-            {isStarter && user?.chosenNiches && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-amber-300 text-sm">
-                  <Lock className="w-3.5 h-3.5 inline mr-1.5" />
-                  You're on the Starter plan with <strong>{user.chosenNiches.length} permanent niches</strong> selected. Upgrade for access to all niches.
+            {isStarter && chosenNiches && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <p className="text-sm text-amber-300">
+                  <Lock className="mr-1.5 inline h-3.5 w-3.5" />
+                  Starter plan: <strong>{chosenNiches.length} niches</strong>{" "}
+                  selected. Upgrade for all niches.
                 </p>
-                <Button size="sm" onClick={() => navigate("/pricing-app")} className="bg-amber-500 hover:bg-amber-600 text-white shrink-0">
-                  <Crown className="w-3.5 h-3.5 mr-1.5" />Upgrade
+                <Button
+                  size="sm"
+                  onClick={() => navigate("/pricing-app")}
+                  className="shrink-0 bg-amber-500 text-white hover:bg-amber-600"
+                >
+                  <Crown className="mr-1.5 h-3.5 w-3.5" />
+                  Upgrade
                 </Button>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(nicheTemplates).map(([niche, template]) => {
-                const allowed = isNicheAllowed(niche);
-                return (
-                  <button
-                    key={niche}
-                    type="button"
-                    onClick={() => {
-                      if (allowed) {
-                        handleNicheSelect(niche);
-                      } else {
-                        navigate("/pricing-app");
-                      }
-                    }}
-                    className={`p-4 rounded-xl border transition-all text-left group relative ${
-                      allowed
-                        ? "bg-[#111] border-white/10 hover:border-[#FF6B00]/50 hover:bg-[#161616]"
-                        : "bg-[#111]/50 border-white/5 cursor-pointer"
-                    }`}
-                  >
-                    {!allowed && (
-                      <div className="absolute top-3 right-3">
-                        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] gap-1">
-                          <Lock className="w-2.5 h-2.5" />
-                          Pro
-                        </Badge>
+            <Card className="border-white/10 bg-[#111]">
+              <CardHeader>
+                <CardTitle className="text-white">Saved Templates</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button
+                  onClick={handleSaveTemplate}
+                  className="w-full bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
+                >
+                  <Save className="mr-1.5 h-4 w-4" />
+                  Save Current Questions as Template
+                </Button>
+
+                {savedTemplates.length === 0 ? (
+                  <p className="py-3 text-center text-sm text-white/40">
+                    No saved templates yet.
+                  </p>
+                ) : (
+                  savedTemplates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 p-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-white">
+                          {template.name}
+                        </div>
+                        <div className="text-xs text-white/40">
+                          {normalizeQuestions(template.questions).length} questions
+                        </div>
                       </div>
-                    )}
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className={`font-medium transition-colors ${
-                        allowed ? "text-white group-hover:text-[#FF6B00]" : "text-white/40"
-                      }`}>
-                        {niche}
-                      </h3>
-                      {allowed && (
-                        <Badge variant="outline" className="border-white/10 text-white/50 text-xs">
-                          {template.length} Qs
-                        </Badge>
-                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleLoadTemplate(template)}
+                          className="text-[#FF6B00] hover:bg-[#FF6B00]/10"
+                        >
+                          Load
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteTemplate(template.id)}
+                          className="text-red-400 hover:bg-red-500/10"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <p className={`text-xs ${allowed ? "text-white/40" : "text-white/20"}`}>
-                      {allowed
-                        ? template.slice(0, 3).map(q => q.text).join(" • ").substring(0, 80) + "..."
-                        : "Upgrade to Pro to unlock this niche template"}
-                    </p>
-                    {allowed ? (
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {Array.from(new Set(template.map(q => q.type))).slice(0, 4).map(type => (
-                          <span key={type} className={`text-[10px] px-1.5 py-0.5 rounded ${questionTypeColors[type]}`}>
-                            {questionTypeLabels[type]}
-                          </span>
-                        ))}
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <div>
+              <h2 className="mb-3 text-lg font-semibold text-white">
+                Niche Templates
+              </h2>
+
+              {isStarter && allowedNiches.length === 0 && (
+                <p className="mb-4 text-sm text-amber-300">
+                  Choose your 5 Starter niches first to use templates.
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {NICHES.map((niche) => {
+                  const allowed = isNicheAllowed(niche.name);
+
+                  return (
+                    <button
+                      key={niche.name}
+                      type="button"
+                      onClick={() => handleNicheSelect(niche)}
+                      className={`relative rounded-xl border p-4 text-left transition-all ${
+                        allowed
+                          ? "border-white/10 bg-[#111] hover:border-[#FF6B00]/50 hover:bg-[#161616]"
+                          : "border-white/5 bg-[#111]/50"
+                      }`}
+                    >
+                      {!allowed && (
+                        <div className="absolute right-3 top-3">
+                          <Badge className="gap-1 border-amber-500/30 bg-amber-500/20 text-[10px] text-amber-400">
+                            <Lock className="h-2.5 w-2.5" />
+                            Pro
+                          </Badge>
+                        </div>
+                      )}
+
+                      <div className="mb-2 flex items-center justify-between">
+                        <h3
+                          className={`font-medium ${
+                            allowed ? "text-white" : "text-white/40"
+                          }`}
+                        >
+                          {niche.name}
+                        </h3>
+
+                        {allowed && (
+                          <Badge
+                            variant="outline"
+                            className="border-white/10 text-xs text-white/50"
+                          >
+                            {(niche.questions || []).length} Qs
+                          </Badge>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 mt-3 text-amber-400 text-xs font-medium">
-                        <Crown className="w-3 h-3" />
-                        Upgrade to unlock
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+
+                      <p className={`text-xs ${allowed ? "text-white/40" : "text-white/20"}`}>
+                        {allowed
+                          ? (niche.questions || [])
+                              .slice(0, 3)
+                              .join(" • ")
+                              .substring(0, 90) + "..."
+                          : "Upgrade to unlock this niche template."}
+                      </p>
+
+                      {!allowed && (
+                        <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-amber-400">
+                          <Crown className="h-3 w-3" />
+                          Upgrade to unlock
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </TabsContent>
-
         </Tabs>
       </div>
 
       <ShareBriefDialog
         brief={{
-          id: id,
+          id,
           share_token: briefData?.share_token,
           share_enabled: briefData?.share_enabled,
           clientName,
