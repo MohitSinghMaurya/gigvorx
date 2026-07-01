@@ -15,7 +15,6 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -28,23 +27,24 @@ export default function Login() {
       toast.success("Welcome back!");
       navigate(location.state?.from || "/dashboard");
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex">
-      <div className="flex-1 flex items-center justify-center p-6">
+    <div className="flex min-h-screen">
+      <div className="flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <Link to="/" className="inline-block mb-10">
+          <Link to="/" className="mb-10 inline-block">
             <BrandLockup size={32} />
           </Link>
 
           <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-          <p className="text-muted-foreground mt-1.5 text-sm">
-            Sign in to continue your client workflow and check your trial status.
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Sign in to continue managing briefs, invoices, clients, and your
+            trial status.
           </p>
 
           <form onSubmit={submit} className="mt-8 space-y-4">
@@ -52,7 +52,6 @@ export default function Login() {
               <Label htmlFor="email" className="text-sm">
                 Email
               </Label>
-
               <Input
                 id="email"
                 data-testid="login-email"
@@ -66,7 +65,7 @@ export default function Login() {
             </div>
 
             <div>
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
                 <Label htmlFor="password" className="text-sm">
                   Password
                 </Label>
@@ -74,7 +73,7 @@ export default function Login() {
                 <button
                   type="button"
                   className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => toast.info("Reset link sent (demo)")}
+                  onClick={() => toast.info("Password reset is not available yet.")}
                 >
                   Forgot?
                 </button>
@@ -112,40 +111,36 @@ export default function Login() {
               type="submit"
               disabled={loading}
               data-testid="login-submit"
-              className="w-full h-11 bg-brand-gradient text-white hover:opacity-90 font-semibold shadow-sm shadow-blue-500/20"
+              className="h-11 w-full bg-brand-gradient font-semibold text-white shadow-sm shadow-blue-500/20 hover:opacity-90"
             >
               {loading ? (
-                "Signing in…"
+                "Signing in..."
               ) : (
                 <>
-                  Sign in <ArrowRight className="w-4 h-4 ml-1" />
+                  Sign in <ArrowRight className="ml-1 h-4 w-4" />
                 </>
               )}
             </Button>
           </form>
 
-          <div className="mt-6 rounded-lg border bg-muted/40 p-4 text-xs text-muted-foreground space-y-2">
+          <div className="mt-6 space-y-2 rounded-lg border bg-muted/40 p-4 text-xs text-muted-foreground">
             <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-              <p>If your trial has not started yet, it will start when you sign in.</p>
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+              <p>If your trial has not started yet, it begins when you sign in.</p>
             </div>
             <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
               <p>Your remaining trial days are shown inside the app.</p>
             </div>
           </div>
 
-          <div className="mt-6 p-4 rounded-lg bg-muted/50 border text-xs space-y-1">
+          <div className="mt-6 space-y-1 rounded-lg border bg-muted/50 p-4 text-xs">
             <p className="font-semibold text-foreground">Try the demo</p>
-
             <p className="text-muted-foreground">
-              User:{" "}
-              <span className="font-mono">demo@gigvorx.com / demo1234</span>
+              User: <span className="font-mono">demo@gigvorx.com / demo1234</span>
             </p>
-
             <p className="text-muted-foreground">
-              Admin:{" "}
-              <span className="font-mono">admin@gigvorx.com / admin1234</span>
+              Admin: <span className="font-mono">admin@gigvorx.com / admin1234</span>
             </p>
 
             <button
@@ -155,13 +150,13 @@ export default function Login() {
                 setEmail("demo@gigvorx.com");
                 setPassword("demo1234");
               }}
-              className="text-brand font-medium hover:underline"
+              className="font-medium text-brand hover:underline"
             >
               Fill demo credentials
             </button>
           </div>
 
-          <p className="mt-8 text-sm text-muted-foreground text-center">
+          <p className="mt-8 text-center text-sm text-muted-foreground">
             New here?{" "}
             <Link
               to="/signup"
@@ -174,9 +169,9 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white items-center justify-center p-10 relative overflow-hidden">
+      <div className="relative hidden flex-1 items-center justify-center overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-10 text-white lg:flex">
         <div className="absolute inset-0 bg-dot opacity-10" />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
+        <div className="absolute left-1/2 top-1/3 h-96 w-96 -translate-x-1/2 rounded-full bg-blue-500/20 blur-3xl" />
 
         <div className="relative max-w-md">
           <BrandLogoLarge size={88} className="mb-8" />
@@ -186,16 +181,17 @@ export default function Login() {
           </p>
 
           <blockquote className="mt-4 text-3xl font-bold leading-tight tracking-tight">
-            “Instead of chasing client details in chats, I now collect everything in one structured workflow.”
+            “Instead of chasing client details in chats, I now collect everything
+            in one structured workflow.”
           </blockquote>
 
           <div className="mt-6 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 font-bold">
               AK
             </div>
 
             <div>
-              <p className="font-semibold text-sm">Anika Kapoor</p>
+              <p className="text-sm font-semibold">Anika Kapoor</p>
               <p className="text-xs text-white/60">Brand Strategist</p>
             </div>
           </div>
