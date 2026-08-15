@@ -176,10 +176,13 @@ function mapDbProfileToUser(data, authUser = null) {
     };
   }
 
-  if (
-    mapped.planStatus === "early_access" ||
-    mapped.billingStatus === "free_beta" ||
-    (isPaidPlan(mapped.plan) && !isPaidProfile(mapped))
+ if (
+    mapped.role !== "admin" &&
+    (
+      mapped.planStatus === "early_access" ||
+      mapped.billingStatus === "free_beta" ||
+      (isPaidPlan(mapped.plan) && !isPaidProfile(mapped))
+    )
   ) {
     return {
       ...mapped,
