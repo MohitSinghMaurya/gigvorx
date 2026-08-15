@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
-const URL = "https://fdlbarxvdtifawunvndz.supabase.co";
-const KEY = "sb_publishable_IIaedv182GTrEvFdufEMoA_V-L9iZv5";
+const URL = import.meta.env.VITE_SUPABASE_URL;
+const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const isSupabaseEnabled = Boolean(URL && KEY);
 
